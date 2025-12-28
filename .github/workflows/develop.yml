@@ -71,5 +71,5 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/trubanb-pipeline-dev-2:${{ needs.release.outputs.new_release_version }}
-            ghcr.io/${{ github.repository_owner }}/trubanb-pipeline-dev-2:beta
+            ghcr.io/${{ github.repository_owner }}/trubanb-reservation-service:${{ needs.release.outputs.new_release_version }}
+            ghcr.io/${{ github.repository_owner }}/trubanb-reservation-service:beta
