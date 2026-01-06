@@ -1,3 +1,6 @@
+// Import tracing FIRST - before any other imports
+import './tracing';
+
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 
