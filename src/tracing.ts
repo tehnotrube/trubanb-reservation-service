@@ -42,7 +42,9 @@ if (otlpEndpoint && otlpEndpoint.trim() !== '') {
       .finally(() => process.exit(0));
   });
 } else {
-  console.log('OpenTelemetry tracing disabled (OTEL_EXPORTER_OTLP_ENDPOINT not set)');
+  console.log(
+    'OpenTelemetry tracing disabled (OTEL_EXPORTER_OTLP_ENDPOINT not set)',
+  );
 }
 
 export default sdk;
