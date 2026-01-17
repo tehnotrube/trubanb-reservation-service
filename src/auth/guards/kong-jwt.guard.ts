@@ -5,15 +5,8 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { AuthenticatedUser } from '../interfaces/authenticated-user.interface';
-import { UserRole } from './roles.guard';
+import { UserRole } from '../enums/user-role.enum';
 
-/**
- * Guard that extracts user information from Kong-injected headers
- * Kong JWT plugin validates the token and injects these headers:
- * - X-User-Id: User's unique identifier
- * - X-User-Email: User's email address
- * - X-User-Role: User's role (guest, host, admin)
- */
 interface RequestWithHeaders {
   headers: {
     'x-user-id'?: string;
@@ -28,7 +21,6 @@ export class KongJwtGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<RequestWithHeaders>();
 
-    // Extract user info from Kong headers
     const userId = request.headers['x-user-id'];
     const userEmail = request.headers['x-user-email'];
     const userRole = request.headers['x-user-role'] as UserRole | undefined;
@@ -39,7 +31,6 @@ export class KongJwtGuard implements CanActivate {
       );
     }
 
-    // Attach user info to request object for use in controllers
     const user: AuthenticatedUser = {
       id: userId,
       email: userEmail ?? '',

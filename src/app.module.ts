@@ -5,6 +5,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { MetricsModule } from './metrics';
 import { ReservationsModule } from './reservations';
+import { AuthModule } from './auth';
 import { getTypeOrmConfig } from './db/typeorm.config';
 
 @Module({
@@ -16,6 +17,7 @@ import { getTypeOrmConfig } from './db/typeorm.config';
       useFactory: () => getTypeOrmConfig(),
     }),
     MetricsModule,
+    AuthModule,
     ReservationsModule,
   ],
   controllers: [AppController],

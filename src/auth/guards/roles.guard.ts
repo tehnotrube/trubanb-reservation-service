@@ -6,17 +6,8 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ROLES_KEY } from '../decorators/roles.decorator';
+import { UserRole } from '../enums/user-role.enum';
 
-export enum UserRole {
-  GUEST = 'guest',
-  HOST = 'host',
-  ADMIN = 'admin',
-}
-
-/**
- * Guard that checks if the user has the required role(s)
- * Works in conjunction with @Roles() decorator
- */
 @Injectable()
 export class RolesGuard implements CanActivate {
   constructor(private reflector: Reflector) {}
@@ -27,7 +18,6 @@ export class RolesGuard implements CanActivate {
       [context.getHandler(), context.getClass()],
     );
 
-    // If no roles are required, allow access
     if (!requiredRoles) {
       return true;
     }
