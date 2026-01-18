@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package accommodation;
+
+service AccommodationService {
+  rpc GetAccommodationInfo(GetAccommodationInfoRequest) returns (GetAccommodationInfoResponse);
+}
+
+message GetAccommodationInfoRequest {
+  string accommodation_id = 1;
+}
+
+message GetAccommodationInfoResponse {
+  bool exists = 1;
+  string accommodation_id = 2;
+  double base_price = 3;
+  bool auto_approve = 4;
+  string host_id = 5;
+  int32 min_guests = 6;
+  int32 max_guests = 7;
+  bool is_per_unit = 8;
+}

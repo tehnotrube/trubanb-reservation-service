@@ -28,6 +28,9 @@ export class Reservation {
   @Column({ type: 'int' })
   numberOfGuests: number;
 
+  @Column({ type: 'decimal', precision: 10, scale: 2 })
+  price: number;
+
   @Column({ type: 'uuid' })
   requestId: string;
 

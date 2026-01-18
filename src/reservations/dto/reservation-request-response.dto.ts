@@ -27,6 +27,10 @@ export class ReservationRequestResponseDto {
   @Expose()
   numberOfGuests: number;
 
+  @ApiProperty({ description: 'Total price for the reservation' })
+  @Expose()
+  price: number;
+
   @ApiProperty({ description: 'Request status', enum: ReservationRequestStatus })
   @Expose()
   status: ReservationRequestStatus;

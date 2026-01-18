@@ -41,16 +41,24 @@ export class ReservationsController {
   @UseGuards(KongJwtGuard, RolesGuard)
   @Roles(UserRole.GUEST)
   @ApiOperation({ summary: 'Create a new reservation request' })
-  @ApiResponse({ status: 201, description: 'Request created', type: ReservationRequestResponseDto })
+  @ApiResponse({ status: 201, description: 'Request created (auto-approved if accommodation has autoApprove enabled)' })
   @ApiResponse({ status: 400, description: 'Invalid input or dates already reserved' })
+  @ApiResponse({ status: 404, description: 'Accommodation not found' })
   async createRequest(
     @Body() dto: CreateReservationRequestDto,
     @CurrentUser() user: AuthenticatedUser,
-  ): Promise<ReservationRequestResponseDto> {
-    const request = await this.reservationsService.createRequest(dto, user.id);
-    return plainToInstance(ReservationRequestResponseDto, request, {
-      excludeExtraneousValues: true,
-    });
+  ): Promise<{ request: ReservationRequestResponseDto; reservation?: ReservationResponseDto }> {
+    const result = await this.reservationsService.createRequest(dto, user.id);
+    return {
+      request: plainToInstance(ReservationRequestResponseDto, result.request, {
+        excludeExtraneousValues: true,
+      }),
+      reservation: result.reservation
+        ? plainToInstance(ReservationResponseDto, result.reservation, {
+            excludeExtraneousValues: true,
+          })
+        : undefined,
+    };
   }
 
   @Get('requests')

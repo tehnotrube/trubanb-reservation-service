@@ -26,6 +26,10 @@ export class ReservationResponseDto {
   @Expose()
   numberOfGuests: number;
 
+  @ApiProperty({ description: 'Total price for the reservation' })
+  @Expose()
+  price: number;
+
   @ApiProperty({ description: 'Original request ID' })
   @Expose()
   requestId: string;

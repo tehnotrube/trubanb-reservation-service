@@ -15,6 +15,7 @@ import {
 import { ReservationRequest, Reservation } from './entities';
 import { ReservationRequestStatus } from './enums';
 import { CreateReservationRequestDto } from './dto';
+import { AccommodationClientService } from '../accommodation-client';
 
 @Injectable()
 export class ReservationsService {
@@ -23,15 +24,17 @@ export class ReservationsService {
     private readonly requestRepository: Repository<ReservationRequest>,
     @InjectRepository(Reservation)
     private readonly reservationRepository: Repository<Reservation>,
+    private readonly accommodationClient: AccommodationClientService,
   ) {}
 
   /**
    * Create a new reservation request (Guest only)
+   * If accommodation has autoApprove enabled, automatically creates a reservation
    */
   async createRequest(
     dto: CreateReservationRequestDto,
     guestId: string,
-  ): Promise<ReservationRequest> {
+  ): Promise<{ request: ReservationRequest; reservation?: Reservation }> {
     // Validate date range
     const startDate = new Date(dto.startDate);
     const endDate = new Date(dto.endDate);
@@ -45,6 +48,41 @@ export class ReservationsService {
     if (startDate < today) {
       throw new BadRequestException('Start date cannot be in the past');
     }
+
+    // Validate accommodation exists and get pricing info
+    const accommodationInfo = await this.accommodationClient.getAccommodationInfo(
+      dto.accommodationId,
+    );
+
+    if (!accommodationInfo.exists) {
+      throw new NotFoundException(
+        `Accommodation with ID ${dto.accommodationId} not found`,
+      );
+    }
+
+    // Validate number of guests
+    if (dto.numberOfGuests < accommodationInfo.minGuests) {
+      throw new BadRequestException(
+        `Minimum number of guests is ${accommodationInfo.minGuests}`,
+      );
+    }
+
+    if (dto.numberOfGuests > accommodationInfo.maxGuests) {
+      throw new BadRequestException(
+        `Maximum number of guests is ${accommodationInfo.maxGuests}`,
+      );
+    }
+
+    // Calculate price based on number of nights and pricing model
+    const nights = Math.ceil(
+      (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24),
+    );
+
+    // If isPerUnit: price = basePrice × nights (flat rate for whole unit)
+    // If !isPerUnit (per person): price = basePrice × nights × numberOfGuests
+    const totalPrice = accommodationInfo.isPerUnit
+      ? accommodationInfo.basePrice * nights
+      : accommodationInfo.basePrice * nights * dto.numberOfGuests;
 
     // Check if there's already an approved reservation for this period
     const existingReservation = await this.reservationRepository.findOne({
@@ -61,16 +99,54 @@ export class ReservationsService {
       );
     }
 
+    // If autoApprove is enabled, create reservation immediately
+    if (accommodationInfo.autoApprove) {
+      const request = this.requestRepository.create({
+        accommodationId: dto.accommodationId,
+        guestId,
+        startDate,
+        endDate,
+        numberOfGuests: dto.numberOfGuests,
+        price: totalPrice,
+        status: ReservationRequestStatus.APPROVED,
+      });
+      const savedRequest = await this.requestRepository.save(request);
+
+      const reservation = this.reservationRepository.create({
+        accommodationId: dto.accommodationId,
+        guestId,
+        startDate,
+        endDate,
+        numberOfGuests: dto.numberOfGuests,
+        price: totalPrice,
+        requestId: savedRequest.id,
+      });
+      const savedReservation = await this.reservationRepository.save(reservation);
+
+      // Auto-reject overlapping pending requests
+      await this.rejectOverlappingRequests(
+        dto.accommodationId,
+        startDate,
+        endDate,
+        savedRequest.id,
+      );
+
+      return { request: savedRequest, reservation: savedReservation };
+    }
+
+    // Otherwise create a pending request
     const request = this.requestRepository.create({
       accommodationId: dto.accommodationId,
       guestId,
       startDate,
       endDate,
       numberOfGuests: dto.numberOfGuests,
+      price: totalPrice,
       status: ReservationRequestStatus.PENDING,
     });
 
-    return this.requestRepository.save(request);
+    const savedRequest = await this.requestRepository.save(request);
+    return { request: savedRequest };
   }
 
   /**
@@ -146,6 +222,7 @@ export class ReservationsService {
       startDate: request.startDate,
       endDate: request.endDate,
       numberOfGuests: request.numberOfGuests,
+      price: request.price,
       requestId: request.id,
     });
     const savedReservation = await this.reservationRepository.save(reservation);

@@ -29,6 +29,9 @@ export class ReservationRequest {
   @Column({ type: 'int' })
   numberOfGuests: number;
 
+  @Column({ type: 'decimal', precision: 10, scale: 2 })
+  price: number;
+
   @Column({
     type: 'enum',
     enum: ReservationRequestStatus,
