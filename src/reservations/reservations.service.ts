@@ -5,13 +5,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import {
-  Repository,
-  LessThanOrEqual,
-  MoreThanOrEqual,
-  Not,
-  In,
-} from 'typeorm';
+import { Repository, LessThanOrEqual, MoreThanOrEqual, Not, In } from 'typeorm';
 import { ReservationRequest, Reservation } from './entities';
 import { ReservationRequestStatus } from './enums';
 import { CreateReservationRequestDto } from './dto';
@@ -152,7 +146,10 @@ export class ReservationsService {
   /**
    * Cancel a pending reservation request (Guest only - own requests)
    */
-  async cancelRequest(requestId: string, guestId: string): Promise<ReservationRequest> {
+  async cancelRequest(
+    requestId: string,
+    guestId: string,
+  ): Promise<ReservationRequest> {
     const request = await this.requestRepository.findOne({
       where: { id: requestId },
     });
@@ -241,7 +238,10 @@ export class ReservationsService {
   /**
    * Reject a reservation request (Host only)
    */
-  async rejectRequest(requestId: string, hostId: string): Promise<ReservationRequest> {
+  async rejectRequest(
+    requestId: string,
+    hostId: string,
+  ): Promise<ReservationRequest> {
     const request = await this.requestRepository.findOne({
       where: { id: requestId },
     });

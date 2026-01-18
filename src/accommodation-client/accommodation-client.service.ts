@@ -1,5 +1,5 @@
 import { Injectable, Inject, OnModuleInit } from '@nestjs/common';
-import { ClientGrpc } from '@nestjs/microservices';
+import * as microservices from '@nestjs/microservices';
 import { Observable, firstValueFrom } from 'rxjs';
 
 interface GetAccommodationInfoRequest {
@@ -28,7 +28,8 @@ export class AccommodationClientService implements OnModuleInit {
   private accommodationService: AccommodationServiceGrpc;
 
   constructor(
-    @Inject('ACCOMMODATION_PACKAGE') private readonly client: ClientGrpc,
+    @Inject('ACCOMMODATION_PACKAGE')
+    private readonly client: microservices.ClientGrpc,
   ) {}
 
   onModuleInit() {
