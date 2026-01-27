@@ -39,7 +39,7 @@ export class Reservation {
   request: ReservationRequest;
 
   @Column({ default: 'RESERVATION' })
-  reason: 'RESERVATION' | 'MANUAL';
+  type: 'RESERVATION' | 'MANUAL';
 
   @CreateDateColumn()
   createdAt: Date;

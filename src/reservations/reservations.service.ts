@@ -381,7 +381,7 @@ export class ReservationsService {
       endDate,
       numberOfGuests: 0,
       price: 0,
-      reason: 'MANUAL',
+      type: 'MANUAL',
     });
 
     const savedBlock = await this.reservationRepository.save(manualBlock);
@@ -396,7 +396,7 @@ export class ReservationsService {
     hostId: string,
   ): Promise<void> {
     const block = await this.reservationRepository.findOne({
-      where: { id: reservationId, reason: 'MANUAL' },
+      where: { id: reservationId, type: 'MANUAL' },
     });
 
     if (!block) throw new NotFoundException('Manual block not found');
@@ -416,7 +416,7 @@ export class ReservationsService {
       accommodationId: reservation.accommodationId,
       startDate: reservation.startDate.toISOString(),
       endDate: reservation.endDate.toISOString(),
-      reason: reservation.reason,
+      reason: reservation.type,
     };
 
     await this.eventsPublisher.reservationCreated(event);

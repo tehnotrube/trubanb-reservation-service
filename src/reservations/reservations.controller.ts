@@ -30,42 +30,40 @@ import { plainToInstance } from 'class-transformer';
 export class ReservationsController {
   constructor(private readonly reservationsService: ReservationsService) {}
 
-  // ============================================================================
-  // RESERVATION REQUESTS - Guest endpoints
-  // ============================================================================
-
   @Post('requests')
   @UseGuards(auth.KongJwtGuard, auth.RolesGuard)
   @auth.Roles(auth.UserRole.GUEST)
   @ApiOperation({ summary: 'Create a new reservation request' })
   @ApiResponse({
     status: 201,
-    description: 'Request created',
-    type: ReservationRequestResponseDto,
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Invalid input or dates already reserved',
+    description: 'Request created (and potentially auto-approved)',
   })
   async createRequest(
     @Body() dto: CreateReservationRequestDto,
     @auth.CurrentUser() user: auth.AuthenticatedUser,
-  ): Promise<ReservationRequestResponseDto> {
-    const request = await this.reservationsService.createRequest(dto, user.id);
-    return plainToInstance(ReservationRequestResponseDto, request, {
-      excludeExtraneousValues: true,
-    });
+  ): Promise<{
+    request: ReservationRequestResponseDto;
+    reservation?: ReservationResponseDto;
+  }> {
+    const result = await this.reservationsService.createRequest(dto, user.id);
+
+    // We must map the inner objects specifically because 'result' is a wrapper
+    return {
+      request: plainToInstance(ReservationRequestResponseDto, result.request, {
+        excludeExtraneousValues: true,
+      }),
+      reservation: result.reservation
+        ? plainToInstance(ReservationResponseDto, result.reservation, {
+            excludeExtraneousValues: true,
+          })
+        : undefined,
+    };
   }
 
   @Get('requests')
   @UseGuards(auth.KongJwtGuard, auth.RolesGuard)
   @auth.Roles(auth.UserRole.GUEST)
   @ApiOperation({ summary: 'Get all my reservation requests' })
-  @ApiResponse({
-    status: 200,
-    description: 'List of requests',
-    type: [ReservationRequestResponseDto],
-  })
   async getMyRequests(
     @auth.CurrentUser() user: auth.AuthenticatedUser,
   ): Promise<ReservationRequestResponseDto[]> {
@@ -79,13 +77,6 @@ export class ReservationsController {
 
   @Get('requests/:id')
   @UseGuards(auth.KongJwtGuard)
-  @ApiOperation({ summary: 'Get a reservation request by ID' })
-  @ApiResponse({
-    status: 200,
-    description: 'Request details',
-    type: ReservationRequestResponseDto,
-  })
-  @ApiResponse({ status: 404, description: 'Request not found' })
   async getRequestById(
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<ReservationRequestResponseDto> {
@@ -98,15 +89,6 @@ export class ReservationsController {
   @Delete('requests/:id')
   @UseGuards(auth.KongJwtGuard, auth.RolesGuard)
   @auth.Roles(auth.UserRole.GUEST)
-  @ApiOperation({ summary: 'Cancel a pending reservation request' })
-  @ApiResponse({
-    status: 200,
-    description: 'Request cancelled',
-    type: ReservationRequestResponseDto,
-  })
-  @ApiResponse({ status: 400, description: 'Request is not pending' })
-  @ApiResponse({ status: 403, description: 'Not your request' })
-  @ApiResponse({ status: 404, description: 'Request not found' })
   async cancelRequest(
     @Param('id', ParseUUIDPipe) id: string,
     @auth.CurrentUser() user: auth.AuthenticatedUser,
@@ -117,23 +99,12 @@ export class ReservationsController {
     });
   }
 
-  // ============================================================================
-  // RESERVATION REQUESTS - Host endpoints
-  // ============================================================================
-
   @Get('requests/pending/:accommodationId')
   @UseGuards(auth.KongJwtGuard, auth.RolesGuard)
   @auth.Roles(auth.UserRole.HOST, auth.UserRole.ADMIN)
-  @ApiOperation({ summary: 'Get pending requests for an accommodation' })
-  @ApiResponse({
-    status: 200,
-    description: 'List of pending requests',
-    type: [ReservationRequestResponseDto],
-  })
   async getPendingRequests(
     @Param('accommodationId', ParseUUIDPipe) accommodationId: string,
   ): Promise<ReservationRequestResponseDto[]> {
-    // TODO: Verify user owns this accommodation
     const requests =
       await this.reservationsService.getPendingRequestsForAccommodation(
         accommodationId,
@@ -148,16 +119,6 @@ export class ReservationsController {
   @Put('requests/:id/approve')
   @UseGuards(auth.KongJwtGuard, auth.RolesGuard)
   @auth.Roles(auth.UserRole.HOST, auth.UserRole.ADMIN)
-  @ApiOperation({ summary: 'Approve a reservation request' })
-  @ApiResponse({
-    status: 200,
-    description: 'Request approved, reservation created',
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Request not pending or dates conflict',
-  })
-  @ApiResponse({ status: 404, description: 'Request not found' })
   async approveRequest(@Param('id', ParseUUIDPipe) id: string): Promise<{
     request: ReservationRequestResponseDto;
     reservation: ReservationResponseDto;
@@ -176,14 +137,6 @@ export class ReservationsController {
   @Put('requests/:id/reject')
   @UseGuards(auth.KongJwtGuard, auth.RolesGuard)
   @auth.Roles(auth.UserRole.HOST, auth.UserRole.ADMIN)
-  @ApiOperation({ summary: 'Reject a reservation request' })
-  @ApiResponse({
-    status: 200,
-    description: 'Request rejected',
-    type: ReservationRequestResponseDto,
-  })
-  @ApiResponse({ status: 400, description: 'Request not pending' })
-  @ApiResponse({ status: 404, description: 'Request not found' })
   async rejectRequest(
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<ReservationRequestResponseDto> {
@@ -193,19 +146,9 @@ export class ReservationsController {
     });
   }
 
-  // ============================================================================
-  // RESERVATIONS - Read endpoints
-  // ============================================================================
-
   @Get()
   @UseGuards(auth.KongJwtGuard, auth.RolesGuard)
   @auth.Roles(auth.UserRole.GUEST)
-  @ApiOperation({ summary: 'Get all my reservations' })
-  @ApiResponse({
-    status: 200,
-    description: 'List of reservations',
-    type: [ReservationResponseDto],
-  })
   async getMyReservations(
     @auth.CurrentUser() user: auth.AuthenticatedUser,
   ): Promise<ReservationResponseDto[]> {
@@ -221,13 +164,6 @@ export class ReservationsController {
 
   @Get(':id')
   @UseGuards(auth.KongJwtGuard)
-  @ApiOperation({ summary: 'Get a reservation by ID' })
-  @ApiResponse({
-    status: 200,
-    description: 'Reservation details',
-    type: ReservationResponseDto,
-  })
-  @ApiResponse({ status: 404, description: 'Reservation not found' })
   async getReservationById(
     @Param('id', ParseUUIDPipe) id: string,
   ): Promise<ReservationResponseDto> {

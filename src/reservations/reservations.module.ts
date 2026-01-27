@@ -4,7 +4,7 @@ import { ReservationRequest, Reservation } from './entities';
 import { ReservationsService } from './reservations.service';
 import { ReservationsController } from './reservations.controller';
 import { AccommodationClientModule } from '../accommodation-client';
-import { MessagingModule } from 'src/messaging/messaging.module';
+import { MessagingModule } from '../messaging/messaging.module';
 
 @Module({
   imports: [

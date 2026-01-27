@@ -37,4 +37,8 @@ export class ReservationResponseDto {
   @ApiProperty({ description: 'Creation timestamp' })
   @Expose()
   createdAt: Date;
+
+  @ApiProperty({ description: 'Type of reservation' })
+  @Expose()
+  type: string;
 }
