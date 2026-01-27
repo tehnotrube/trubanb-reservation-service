@@ -10,6 +10,8 @@ import { ReservationRequest, Reservation } from './entities';
 import { ReservationRequestStatus } from './enums';
 import { CreateReservationRequestDto } from './dto';
 import { AccommodationClientService } from '../accommodation-client';
+import { ReservationCreatedEvent } from './events/reservation-created.event';
+import { ReservationEventsPublisher } from '../messaging/reservation-events.publisher';
 
 @Injectable()
 export class ReservationsService {
@@ -19,6 +21,7 @@ export class ReservationsService {
     @InjectRepository(Reservation)
     private readonly reservationRepository: Repository<Reservation>,
     private readonly accommodationClient: AccommodationClientService,
+    private readonly eventsPublisher: ReservationEventsPublisher,
   ) {}
 
   /**
@@ -44,9 +47,8 @@ export class ReservationsService {
     }
 
     // Validate accommodation exists and get pricing info
-    const accommodationInfo = await this.accommodationClient.getAccommodationInfo(
-      dto.accommodationId,
-    );
+    const accommodationInfo =
+      await this.accommodationClient.getAccommodationInfo(dto.accommodationId);
 
     if (!accommodationInfo.exists) {
       throw new NotFoundException(
@@ -115,7 +117,10 @@ export class ReservationsService {
         price: totalPrice,
         requestId: savedRequest.id,
       });
-      const savedReservation = await this.reservationRepository.save(reservation);
+      const savedReservation =
+        await this.reservationRepository.save(reservation);
+
+      await this.emitReservationCreated(savedReservation);
 
       // Auto-reject overlapping pending requests
       await this.rejectOverlappingRequests(
@@ -176,7 +181,6 @@ export class ReservationsService {
    */
   async approveRequest(
     requestId: string,
-    hostId: string,
   ): Promise<{ request: ReservationRequest; reservation: Reservation }> {
     const request = await this.requestRepository.findOne({
       where: { id: requestId },
@@ -238,10 +242,7 @@ export class ReservationsService {
   /**
    * Reject a reservation request (Host only)
    */
-  async rejectRequest(
-    requestId: string,
-    hostId: string,
-  ): Promise<ReservationRequest> {
+  async rejectRequest(requestId: string): Promise<ReservationRequest> {
     const request = await this.requestRepository.findOne({
       where: { id: requestId },
     });
@@ -351,5 +352,73 @@ export class ReservationsService {
     }
 
     return reservation;
+  }
+
+  async createManualBlock(
+    accommodationId: string,
+    startDate: Date,
+    endDate: Date,
+    hostId: string,
+  ): Promise<Reservation> {
+    const existing = await this.reservationRepository.findOne({
+      where: {
+        accommodationId,
+        startDate: LessThanOrEqual(endDate),
+        endDate: MoreThanOrEqual(startDate),
+      },
+    });
+
+    if (existing) {
+      throw new BadRequestException(
+        'This period is already reserved or blocked',
+      );
+    }
+
+    const manualBlock = this.reservationRepository.create({
+      accommodationId,
+      guestId: hostId,
+      startDate,
+      endDate,
+      numberOfGuests: 0,
+      price: 0,
+      reason: 'MANUAL',
+    });
+
+    const savedBlock = await this.reservationRepository.save(manualBlock);
+
+    await this.emitReservationCreated(savedBlock);
+
+    return savedBlock;
+  }
+
+  async removeManualBlock(
+    reservationId: string,
+    hostId: string,
+  ): Promise<void> {
+    const block = await this.reservationRepository.findOne({
+      where: { id: reservationId, reason: 'MANUAL' },
+    });
+
+    if (!block) throw new NotFoundException('Manual block not found');
+
+    if (block.guestId !== hostId) {
+      throw new ForbiddenException('You can only remove your own blocks');
+    }
+
+    await this.reservationRepository.delete(reservationId);
+
+    await this.eventsPublisher.reservationRemoved(reservationId);
+  }
+
+  private async emitReservationCreated(reservation: Reservation) {
+    const event: ReservationCreatedEvent = {
+      reservationId: reservation.id,
+      accommodationId: reservation.accommodationId,
+      startDate: reservation.startDate.toISOString(),
+      endDate: reservation.endDate.toISOString(),
+      reason: reservation.reason,
+    };
+
+    await this.eventsPublisher.reservationCreated(event);
   }
 }

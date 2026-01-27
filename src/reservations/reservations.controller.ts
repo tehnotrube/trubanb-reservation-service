@@ -6,7 +6,6 @@ import {
   Delete,
   Body,
   Param,
-  Query,
   UseGuards,
   ParseUUIDPipe,
 } from '@nestjs/common';
@@ -133,7 +132,6 @@ export class ReservationsController {
   })
   async getPendingRequests(
     @Param('accommodationId', ParseUUIDPipe) accommodationId: string,
-    @auth.CurrentUser() user: auth.AuthenticatedUser,
   ): Promise<ReservationRequestResponseDto[]> {
     // TODO: Verify user owns this accommodation
     const requests =
@@ -160,14 +158,11 @@ export class ReservationsController {
     description: 'Request not pending or dates conflict',
   })
   @ApiResponse({ status: 404, description: 'Request not found' })
-  async approveRequest(
-    @Param('id', ParseUUIDPipe) id: string,
-    @auth.CurrentUser() user: auth.AuthenticatedUser,
-  ): Promise<{
+  async approveRequest(@Param('id', ParseUUIDPipe) id: string): Promise<{
     request: ReservationRequestResponseDto;
     reservation: ReservationResponseDto;
   }> {
-    const result = await this.reservationsService.approveRequest(id, user.id);
+    const result = await this.reservationsService.approveRequest(id);
     return {
       request: plainToInstance(ReservationRequestResponseDto, result.request, {
         excludeExtraneousValues: true,
@@ -191,9 +186,8 @@ export class ReservationsController {
   @ApiResponse({ status: 404, description: 'Request not found' })
   async rejectRequest(
     @Param('id', ParseUUIDPipe) id: string,
-    @auth.CurrentUser() user: auth.AuthenticatedUser,
   ): Promise<ReservationRequestResponseDto> {
-    const request = await this.reservationsService.rejectRequest(id, user.id);
+    const request = await this.reservationsService.rejectRequest(id);
     return plainToInstance(ReservationRequestResponseDto, request, {
       excludeExtraneousValues: true,
     });
@@ -241,5 +235,35 @@ export class ReservationsController {
     return plainToInstance(ReservationResponseDto, reservation, {
       excludeExtraneousValues: true,
     });
+  }
+
+  @Post('blocks')
+  @UseGuards(auth.KongJwtGuard, auth.RolesGuard)
+  @auth.Roles(auth.UserRole.HOST)
+  async createBlock(
+    @Body()
+    dto: { accommodationId: string; startDate: string; endDate: string },
+    @auth.CurrentUser() user: auth.AuthenticatedUser,
+  ): Promise<ReservationResponseDto> {
+    const block = await this.reservationsService.createManualBlock(
+      dto.accommodationId,
+      new Date(dto.startDate),
+      new Date(dto.endDate),
+      user.id,
+    );
+    return plainToInstance(ReservationResponseDto, block, {
+      excludeExtraneousValues: true,
+    });
+  }
+
+  @Delete('blocks/:id')
+  @UseGuards(auth.KongJwtGuard, auth.RolesGuard)
+  @auth.Roles(auth.UserRole.HOST)
+  async removeBlock(
+    @Param('id', ParseUUIDPipe) id: string,
+    @auth.CurrentUser() user: auth.AuthenticatedUser,
+  ) {
+    await this.reservationsService.removeManualBlock(id, user.id);
+    return { success: true };
   }
 }

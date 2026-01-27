@@ -31,12 +31,15 @@ export class Reservation {
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   price: number;
 
-  @Column({ type: 'uuid' })
-  requestId: string;
+  @Column({ type: 'uuid', nullable: true })
+  requestId?: string;
 
   @OneToOne(() => ReservationRequest, (request) => request.reservation)
   @JoinColumn({ name: 'requestId' })
   request: ReservationRequest;
+
+  @Column({ default: 'RESERVATION' })
+  reason: 'RESERVATION' | 'MANUAL';
 
   @CreateDateColumn()
   createdAt: Date;
