@@ -20,6 +20,9 @@ export class ReservationRequest {
   @Column()
   guestId: string;
 
+  @Column()
+  hostId: string;
+
   @Column({ type: 'date' })
   startDate: Date;
 

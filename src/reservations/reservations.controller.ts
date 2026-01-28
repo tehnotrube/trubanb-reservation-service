@@ -9,12 +9,7 @@ import {
   UseGuards,
   ParseUUIDPipe,
 } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiBearerAuth,
-} from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { ReservationsService } from './reservations.service';
 import {
   CreateReservationRequestDto,
@@ -33,21 +28,12 @@ export class ReservationsController {
   @Post('requests')
   @UseGuards(auth.KongJwtGuard, auth.RolesGuard)
   @auth.Roles(auth.UserRole.GUEST)
-  @ApiOperation({ summary: 'Create a new reservation request' })
-  @ApiResponse({
-    status: 201,
-    description: 'Request created (and potentially auto-approved)',
-  })
   async createRequest(
     @Body() dto: CreateReservationRequestDto,
     @auth.CurrentUser() user: auth.AuthenticatedUser,
-  ): Promise<{
-    request: ReservationRequestResponseDto;
-    reservation?: ReservationResponseDto;
-  }> {
+  ) {
     const result = await this.reservationsService.createRequest(dto, user.id);
 
-    // We must map the inner objects specifically because 'result' is a wrapper
     return {
       request: plainToInstance(ReservationRequestResponseDto, result.request, {
         excludeExtraneousValues: true,
@@ -63,10 +49,7 @@ export class ReservationsController {
   @Get('requests')
   @UseGuards(auth.KongJwtGuard, auth.RolesGuard)
   @auth.Roles(auth.UserRole.GUEST)
-  @ApiOperation({ summary: 'Get all my reservation requests' })
-  async getMyRequests(
-    @auth.CurrentUser() user: auth.AuthenticatedUser,
-  ): Promise<ReservationRequestResponseDto[]> {
+  async getMyRequests(@auth.CurrentUser() user: auth.AuthenticatedUser) {
     const requests = await this.reservationsService.getRequestsByGuest(user.id);
     return requests.map((r) =>
       plainToInstance(ReservationRequestResponseDto, r, {
@@ -79,8 +62,13 @@ export class ReservationsController {
   @UseGuards(auth.KongJwtGuard)
   async getRequestById(
     @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<ReservationRequestResponseDto> {
-    const request = await this.reservationsService.getRequestById(id);
+    @auth.CurrentUser() user: auth.AuthenticatedUser,
+  ) {
+    const request = await this.reservationsService.getRequestById(
+      id,
+      user.id,
+      user.role,
+    );
     return plainToInstance(ReservationRequestResponseDto, request, {
       excludeExtraneousValues: true,
     });
@@ -92,7 +80,7 @@ export class ReservationsController {
   async cancelRequest(
     @Param('id', ParseUUIDPipe) id: string,
     @auth.CurrentUser() user: auth.AuthenticatedUser,
-  ): Promise<ReservationRequestResponseDto> {
+  ) {
     const request = await this.reservationsService.cancelRequest(id, user.id);
     return plainToInstance(ReservationRequestResponseDto, request, {
       excludeExtraneousValues: true,
@@ -104,14 +92,25 @@ export class ReservationsController {
   @auth.Roles(auth.UserRole.HOST, auth.UserRole.ADMIN)
   async getPendingRequests(
     @Param('accommodationId', ParseUUIDPipe) accommodationId: string,
-  ): Promise<ReservationRequestResponseDto[]> {
+    @auth.CurrentUser() user: auth.AuthenticatedUser,
+  ) {
     const requests =
       await this.reservationsService.getPendingRequestsForAccommodation(
         accommodationId,
+        user.id,
+        user.role,
       );
-    return requests.map((r) =>
-      plainToInstance(ReservationRequestResponseDto, r, {
-        excludeExtraneousValues: true,
+
+    return Promise.all(
+      requests.map(async (r) => {
+        const cancelCount =
+          await this.reservationsService.getGuestCancellationCount(r.guestId);
+        return {
+          ...plainToInstance(ReservationRequestResponseDto, r, {
+            excludeExtraneousValues: true,
+          }),
+          guestCancellationCount: cancelCount,
+        };
       }),
     );
   }
@@ -119,11 +118,16 @@ export class ReservationsController {
   @Put('requests/:id/approve')
   @UseGuards(auth.KongJwtGuard, auth.RolesGuard)
   @auth.Roles(auth.UserRole.HOST, auth.UserRole.ADMIN)
-  async approveRequest(@Param('id', ParseUUIDPipe) id: string): Promise<{
-    request: ReservationRequestResponseDto;
-    reservation: ReservationResponseDto;
-  }> {
-    const result = await this.reservationsService.approveRequest(id);
+  async approveRequest(
+    @Param('id', ParseUUIDPipe) id: string,
+    @auth.CurrentUser() user: auth.AuthenticatedUser,
+  ) {
+    const result = await this.reservationsService.approveRequest(
+      id,
+      user.id,
+      user.role,
+    );
+
     return {
       request: plainToInstance(ReservationRequestResponseDto, result.request, {
         excludeExtraneousValues: true,
@@ -139,22 +143,37 @@ export class ReservationsController {
   @auth.Roles(auth.UserRole.HOST, auth.UserRole.ADMIN)
   async rejectRequest(
     @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<ReservationRequestResponseDto> {
-    const request = await this.reservationsService.rejectRequest(id);
+    @auth.CurrentUser() user: auth.AuthenticatedUser,
+  ) {
+    const request = await this.reservationsService.rejectRequest(
+      id,
+      user.id,
+      user.role,
+    );
     return plainToInstance(ReservationRequestResponseDto, request, {
       excludeExtraneousValues: true,
     });
   }
 
+  @Delete(':id')
+  @UseGuards(auth.KongJwtGuard, auth.RolesGuard)
+  @auth.Roles(auth.UserRole.GUEST)
+  async cancelReservation(
+    @Param('id', ParseUUIDPipe) id: string,
+    @auth.CurrentUser() user: auth.AuthenticatedUser,
+  ) {
+    await this.reservationsService.cancelReservation(id, user.id);
+    return { success: true };
+  }
+
   @Get()
   @UseGuards(auth.KongJwtGuard, auth.RolesGuard)
   @auth.Roles(auth.UserRole.GUEST)
-  async getMyReservations(
-    @auth.CurrentUser() user: auth.AuthenticatedUser,
-  ): Promise<ReservationResponseDto[]> {
+  async getMyReservations(@auth.CurrentUser() user: auth.AuthenticatedUser) {
     const reservations = await this.reservationsService.getReservationsByGuest(
       user.id,
     );
+
     return reservations.map((r) =>
       plainToInstance(ReservationResponseDto, r, {
         excludeExtraneousValues: true,
@@ -166,8 +185,13 @@ export class ReservationsController {
   @UseGuards(auth.KongJwtGuard)
   async getReservationById(
     @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<ReservationResponseDto> {
-    const reservation = await this.reservationsService.getReservationById(id);
+    @auth.CurrentUser() user: auth.AuthenticatedUser,
+  ) {
+    const reservation = await this.reservationsService.getReservationById(
+      id,
+      user.id,
+      user.role,
+    );
     return plainToInstance(ReservationResponseDto, reservation, {
       excludeExtraneousValues: true,
     });
@@ -180,13 +204,14 @@ export class ReservationsController {
     @Body()
     dto: { accommodationId: string; startDate: string; endDate: string },
     @auth.CurrentUser() user: auth.AuthenticatedUser,
-  ): Promise<ReservationResponseDto> {
+  ) {
     const block = await this.reservationsService.createManualBlock(
       dto.accommodationId,
       new Date(dto.startDate),
       new Date(dto.endDate),
       user.id,
     );
+
     return plainToInstance(ReservationResponseDto, block, {
       excludeExtraneousValues: true,
     });

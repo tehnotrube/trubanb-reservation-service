@@ -38,6 +38,7 @@ export default tseslint.config(
         },
       ],
       "prettier/prettier": ["error", { endOfLine: "auto" }],
+      "@typescript-eslint/unbound-method": "off"
     },
   },
 );

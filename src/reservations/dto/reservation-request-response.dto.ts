@@ -15,6 +15,10 @@ export class ReservationRequestResponseDto {
   @Expose()
   guestId: string;
 
+  @ApiProperty({ description: 'Host ID' })
+  @Expose()
+  hostId: string;
+
   @ApiProperty({ description: 'Start date of reservation' })
   @Expose()
   startDate: Date;

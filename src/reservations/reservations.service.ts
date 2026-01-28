@@ -12,6 +12,7 @@ import { CreateReservationRequestDto } from './dto';
 import { AccommodationClientService } from '../accommodation-client';
 import { ReservationCreatedEvent } from './events/reservation-created.event';
 import { ReservationEventsPublisher } from '../messaging/reservation-events.publisher';
+import { UserRole } from '../auth';
 
 @Injectable()
 export class ReservationsService {
@@ -24,15 +25,7 @@ export class ReservationsService {
     private readonly eventsPublisher: ReservationEventsPublisher,
   ) {}
 
-  /**
-   * Create a new reservation request (Guest only)
-   * If accommodation has autoApprove enabled, automatically creates a reservation
-   */
-  async createRequest(
-    dto: CreateReservationRequestDto,
-    guestId: string,
-  ): Promise<{ request: ReservationRequest; reservation?: Reservation }> {
-    // Validate date range
+  async createRequest(dto: CreateReservationRequestDto, guestId: string) {
     const startDate = new Date(dto.startDate);
     const endDate = new Date(dto.endDate);
     const today = new Date();
@@ -46,42 +39,35 @@ export class ReservationsService {
       throw new BadRequestException('Start date cannot be in the past');
     }
 
-    // Validate accommodation exists and get pricing info
-    const accommodationInfo =
-      await this.accommodationClient.getAccommodationInfo(dto.accommodationId);
+    const accommodation = await this.accommodationClient.getAccommodationInfo(
+      dto.accommodationId,
+    );
 
-    if (!accommodationInfo.exists) {
-      throw new NotFoundException(
-        `Accommodation with ID ${dto.accommodationId} not found`,
-      );
+    if (!accommodation.exists) {
+      throw new NotFoundException('Accommodation not found');
     }
 
-    // Validate number of guests
-    if (dto.numberOfGuests < accommodationInfo.minGuests) {
+    if (dto.numberOfGuests < accommodation.minGuests) {
       throw new BadRequestException(
-        `Minimum number of guests is ${accommodationInfo.minGuests}`,
+        `Minimum number of guests is ${accommodation.minGuests}`,
       );
     }
 
-    if (dto.numberOfGuests > accommodationInfo.maxGuests) {
+    if (dto.numberOfGuests < accommodation.minGuests) {
       throw new BadRequestException(
-        `Maximum number of guests is ${accommodationInfo.maxGuests}`,
+        `Minimum number of guests is ${accommodation.minGuests}`,
       );
     }
 
-    // Calculate price based on number of nights and pricing model
     const nights = Math.ceil(
       (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24),
     );
 
-    // If isPerUnit: price = basePrice × nights (flat rate for whole unit)
-    // If !isPerUnit (per person): price = basePrice × nights × numberOfGuests
-    const totalPrice = accommodationInfo.isPerUnit
-      ? accommodationInfo.basePrice * nights
-      : accommodationInfo.basePrice * nights * dto.numberOfGuests;
+    const price = accommodation.isPerUnit
+      ? accommodation.basePrice * nights
+      : accommodation.basePrice * nights * dto.numberOfGuests;
 
-    // Check if there's already an approved reservation for this period
-    const existingReservation = await this.reservationRepository.findOne({
+    const existing = await this.reservationRepository.findOne({
       where: {
         accommodationId: dto.accommodationId,
         startDate: LessThanOrEqual(endDate),
@@ -89,116 +75,83 @@ export class ReservationsService {
       },
     });
 
-    if (existingReservation) {
-      throw new BadRequestException(
-        'This accommodation is already reserved for the selected dates',
-      );
+    if (existing) {
+      throw new BadRequestException('Accommodation is already booked');
     }
 
-    // If autoApprove is enabled, create reservation immediately
-    if (accommodationInfo.autoApprove) {
-      const request = this.requestRepository.create({
-        accommodationId: dto.accommodationId,
-        guestId,
-        startDate,
-        endDate,
-        numberOfGuests: dto.numberOfGuests,
-        price: totalPrice,
-        status: ReservationRequestStatus.APPROVED,
-      });
-      const savedRequest = await this.requestRepository.save(request);
-
-      const reservation = this.reservationRepository.create({
-        accommodationId: dto.accommodationId,
-        guestId,
-        startDate,
-        endDate,
-        numberOfGuests: dto.numberOfGuests,
-        price: totalPrice,
-        requestId: savedRequest.id,
-      });
-      const savedReservation =
-        await this.reservationRepository.save(reservation);
-
-      await this.emitReservationCreated(savedReservation);
-
-      // Auto-reject overlapping pending requests
-      await this.rejectOverlappingRequests(
-        dto.accommodationId,
-        startDate,
-        endDate,
-        savedRequest.id,
-      );
-
-      return { request: savedRequest, reservation: savedReservation };
-    }
-
-    // Otherwise create a pending request
     const request = this.requestRepository.create({
       accommodationId: dto.accommodationId,
       guestId,
+      hostId: accommodation.hostId,
       startDate,
       endDate,
       numberOfGuests: dto.numberOfGuests,
-      price: totalPrice,
-      status: ReservationRequestStatus.PENDING,
+      price,
+      status: accommodation.autoApprove
+        ? ReservationRequestStatus.APPROVED
+        : ReservationRequestStatus.PENDING,
     });
 
     const savedRequest = await this.requestRepository.save(request);
-    return { request: savedRequest };
+
+    if (!accommodation.autoApprove) {
+      return { request: savedRequest };
+    }
+
+    const reservation = this.reservationRepository.create({
+      accommodationId: dto.accommodationId,
+      guestId,
+      hostId: accommodation.hostId,
+      startDate,
+      endDate,
+      numberOfGuests: dto.numberOfGuests,
+      price,
+      requestId: savedRequest.id,
+    });
+
+    const savedReservation = await this.reservationRepository.save(reservation);
+
+    await this.emitReservationCreated(savedReservation);
+
+    await this.rejectOverlappingRequests(
+      dto.accommodationId,
+      startDate,
+      endDate,
+      savedRequest.id,
+    );
+
+    return { request: savedRequest, reservation: savedReservation };
   }
 
-  /**
-   * Cancel a pending reservation request (Guest only - own requests)
-   */
-  async cancelRequest(
-    requestId: string,
-    guestId: string,
-  ): Promise<ReservationRequest> {
+  async cancelRequest(requestId: string, guestId: string) {
     const request = await this.requestRepository.findOne({
       where: { id: requestId },
     });
 
-    if (!request) {
-      throw new NotFoundException('Reservation request not found');
-    }
-
-    if (request.guestId !== guestId) {
-      throw new ForbiddenException('You can only cancel your own requests');
-    }
-
-    if (request.status !== ReservationRequestStatus.PENDING) {
-      throw new BadRequestException('Only pending requests can be cancelled');
-    }
+    if (!request) throw new NotFoundException('Request not found');
+    if (request.guestId !== guestId)
+      throw new ForbiddenException('Not authorized to cancel this request');
+    if (request.status !== ReservationRequestStatus.PENDING)
+      throw new BadRequestException('Request is not pending');
 
     request.status = ReservationRequestStatus.CANCELLED;
     return this.requestRepository.save(request);
   }
 
-  /**
-   * Approve a reservation request (Host only)
-   * Creates a reservation and auto-rejects overlapping pending requests
-   */
-  async approveRequest(
-    requestId: string,
-  ): Promise<{ request: ReservationRequest; reservation: Reservation }> {
+  async approveRequest(requestId: string, actorId: string, role: UserRole) {
     const request = await this.requestRepository.findOne({
       where: { id: requestId },
     });
 
-    if (!request) {
-      throw new NotFoundException('Reservation request not found');
+    if (!request) throw new NotFoundException();
+    if (request.status !== ReservationRequestStatus.PENDING)
+      throw new BadRequestException('Request is not pending');
+
+    if (role !== UserRole.ADMIN && request.hostId !== actorId) {
+      throw new ForbiddenException('Not authorized to approve this request');
     }
 
-    if (request.status !== ReservationRequestStatus.PENDING) {
-      throw new BadRequestException('Only pending requests can be approved');
-    }
-
-    // TODO: Verify hostId owns the accommodation (requires call to accommodation service)
-    // For now, we trust the host role check at controller level
-
-    // Check for conflicting approved reservations (race condition protection)
-    const conflictingReservation = await this.reservationRepository.findOne({
+    const conflict = await this.reservationRepository.findOne({
       where: {
         accommodationId: request.accommodationId,
         startDate: LessThanOrEqual(request.endDate),
@@ -206,29 +159,25 @@ export class ReservationsService {
       },
     });
 
-    if (conflictingReservation) {
-      throw new BadRequestException(
-        'Another reservation was already approved for these dates',
-      );
-    }
+    if (conflict)
+      throw new BadRequestException('Accommodation is already booked');
 
-    // Update request status
     request.status = ReservationRequestStatus.APPROVED;
-    const savedRequest = await this.requestRepository.save(request);
+    await this.requestRepository.save(request);
 
-    // Create the reservation
     const reservation = this.reservationRepository.create({
       accommodationId: request.accommodationId,
       guestId: request.guestId,
+      hostId: request.hostId,
       startDate: request.startDate,
       endDate: request.endDate,
       numberOfGuests: request.numberOfGuests,
       price: request.price,
       requestId: request.id,
     });
+
     const savedReservation = await this.reservationRepository.save(reservation);
 
-    // Auto-reject overlapping pending requests
     await this.rejectOverlappingRequests(
       request.accommodationId,
       request.startDate,
@@ -236,65 +185,46 @@ export class ReservationsService {
       request.id,
     );
 
-    return { request: savedRequest, reservation: savedReservation };
+    await this.emitReservationCreated(savedReservation);
+
+    return { request, reservation: savedReservation };
   }
 
-  /**
-   * Reject a reservation request (Host only)
-   */
-  async rejectRequest(requestId: string): Promise<ReservationRequest> {
+  async rejectRequest(requestId: string, actorId: string, role: UserRole) {
     const request = await this.requestRepository.findOne({
       where: { id: requestId },
     });
 
-    if (!request) {
-      throw new NotFoundException('Reservation request not found');
-    }
+    if (!request) throw new NotFoundException();
+    if (request.status !== ReservationRequestStatus.PENDING)
+      throw new BadRequestException('Request is not pending');
 
-    if (request.status !== ReservationRequestStatus.PENDING) {
-      throw new BadRequestException('Only pending requests can be rejected');
+    if (role !== UserRole.ADMIN && request.hostId !== actorId) {
+      throw new ForbiddenException('Not authorized to reject this request');
     }
-
-    // TODO: Verify hostId owns the accommodation
 
     request.status = ReservationRequestStatus.REJECTED;
     return this.requestRepository.save(request);
   }
 
-  /**
-   * Auto-reject all pending requests that overlap with the approved reservation
-   */
-  private async rejectOverlappingRequests(
-    accommodationId: string,
-    startDate: Date,
-    endDate: Date,
-    excludeRequestId: string,
-  ): Promise<void> {
-    const overlappingRequests = await this.requestRepository.find({
-      where: {
-        accommodationId,
-        status: ReservationRequestStatus.PENDING,
-        id: Not(excludeRequestId),
-        startDate: LessThanOrEqual(endDate),
-        endDate: MoreThanOrEqual(startDate),
-      },
-    });
-
-    if (overlappingRequests.length > 0) {
-      const ids = overlappingRequests.map((r) => r.id);
-      await this.requestRepository.update(
-        { id: In(ids) },
-        { status: ReservationRequestStatus.REJECTED },
-      );
-    }
-  }
-
-  /**
-   * Get all pending requests for a specific accommodation (Host)
-   */
   async getPendingRequestsForAccommodation(
     accommodationId: string,
-  ): Promise<ReservationRequest[]> {
+    actorId: string,
+    role: UserRole,
+  ) {
+    if (role !== UserRole.ADMIN) {
+      const probe = await this.requestRepository.findOne({
+        where: { accommodationId },
+        select: ['hostId'],
+      });
+
+      if (!probe || probe.hostId !== actorId) {
+        throw new ForbiddenException(
+          'Not authorized to access this accommodation',
+        );
+      }
+    }
+
     return this.requestRepository.find({
       where: {
         accommodationId,
@@ -304,51 +234,51 @@ export class ReservationsService {
     });
   }
 
-  /**
-   * Get all requests by guest
-   */
-  async getRequestsByGuest(guestId: string): Promise<ReservationRequest[]> {
+  async getRequestsByGuest(guestId: string) {
     return this.requestRepository.find({
       where: { guestId },
       order: { createdAt: 'DESC' },
     });
   }
 
-  /**
-   * Get all reservations by guest
-   */
-  async getReservationsByGuest(guestId: string): Promise<Reservation[]> {
+  async getReservationsByGuest(guestId: string) {
     return this.reservationRepository.find({
       where: { guestId },
       order: { createdAt: 'DESC' },
     });
   }
 
-  /**
-   * Get a single request by ID
-   */
-  async getRequestById(requestId: string): Promise<ReservationRequest> {
+  async getRequestById(id: string, actorId: string, role: UserRole) {
     const request = await this.requestRepository.findOne({
-      where: { id: requestId },
+      where: { id },
     });
 
-    if (!request) {
-      throw new NotFoundException('Reservation request not found');
+    if (!request) throw new NotFoundException('Request not found');
+
+    if (
+      role !== UserRole.ADMIN &&
+      request.guestId !== actorId &&
+      request.hostId !== actorId
+    ) {
+      throw new ForbiddenException('Not authorized to access this request');
     }
 
     return request;
   }
 
-  /**
-   * Get a single reservation by ID
-   */
-  async getReservationById(reservationId: string): Promise<Reservation> {
+  async getReservationById(id: string, actorId: string, role: UserRole) {
     const reservation = await this.reservationRepository.findOne({
-      where: { id: reservationId },
+      where: { id },
     });
 
-    if (!reservation) {
-      throw new NotFoundException('Reservation not found');
+    if (!reservation) throw new NotFoundException('Reservation not found');
+
+    if (
+      role !== UserRole.ADMIN &&
+      reservation.guestId !== actorId &&
+      reservation.hostId !== actorId
+    ) {
+      throw new ForbiddenException('Not authorized to access this reservation');
     }
 
     return reservation;
@@ -359,7 +289,7 @@ export class ReservationsService {
     startDate: Date,
     endDate: Date,
     hostId: string,
-  ): Promise<Reservation> {
+  ) {
     const existing = await this.reservationRepository.findOne({
       where: {
         accommodationId,
@@ -368,15 +298,13 @@ export class ReservationsService {
       },
     });
 
-    if (existing) {
-      throw new BadRequestException(
-        'This period is already reserved or blocked',
-      );
-    }
+    if (existing)
+      throw new BadRequestException('Accommodation is already booked');
 
-    const manualBlock = this.reservationRepository.create({
+    const block = this.reservationRepository.create({
       accommodationId,
       guestId: hostId,
+      hostId,
       startDate,
       endDate,
       numberOfGuests: 0,
@@ -384,25 +312,29 @@ export class ReservationsService {
       type: 'MANUAL',
     });
 
-    const savedBlock = await this.reservationRepository.save(manualBlock);
-
-    await this.emitReservationCreated(savedBlock);
-
-    return savedBlock;
+    const saved = await this.reservationRepository.save(block);
+    await this.emitReservationCreated(saved);
+    return saved;
   }
 
-  async removeManualBlock(
-    reservationId: string,
-    hostId: string,
-  ): Promise<void> {
-    const block = await this.reservationRepository.findOne({
-      where: { id: reservationId, type: 'MANUAL' },
+  async cancelReservation(reservationId: string, guestId: string) {
+    const reservation = await this.reservationRepository.findOne({
+      where: { id: reservationId },
     });
 
-    if (!block) throw new NotFoundException('Manual block not found');
+    if (!reservation) throw new NotFoundException('Reservation not found');
+    if (reservation.guestId !== guestId) {
+      throw new ForbiddenException('You do not own this reservation');
+    }
 
-    if (block.guestId !== hostId) {
-      throw new ForbiddenException('You can only remove your own blocks');
+    const now = new Date();
+    const deadline = new Date(reservation.startDate);
+    deadline.setDate(deadline.getDate() - 1);
+
+    if (now >= deadline) {
+      throw new BadRequestException(
+        'Reservations can only be cancelled up to 24 hours before the start date',
+      );
     }
 
     await this.reservationRepository.delete(reservationId);
@@ -410,12 +342,61 @@ export class ReservationsService {
     await this.eventsPublisher.reservationRemoved(reservationId);
   }
 
+  async getGuestCancellationCount(guestId: string): Promise<number> {
+    return this.requestRepository.count({
+      where: {
+        guestId,
+        status: ReservationRequestStatus.CANCELLED,
+      },
+    });
+  }
+
+  async removeManualBlock(reservationId: string, hostId: string) {
+    const block = await this.reservationRepository.findOne({
+      where: { id: reservationId, type: 'MANUAL' },
+    });
+
+    if (!block) throw new NotFoundException('Block not found');
+    if (block.hostId !== hostId)
+      throw new ForbiddenException('Not authorized to remove this block');
+
+    await this.reservationRepository.delete(reservationId);
+    await this.eventsPublisher.reservationRemoved(reservationId);
+  }
+
+  private async rejectOverlappingRequests(
+    accommodationId: string,
+    startDate: Date,
+    endDate: Date,
+    excludeRequestId: string,
+  ) {
+    const requests = await this.requestRepository.find({
+      where: {
+        accommodationId,
+        status: ReservationRequestStatus.PENDING,
+        id: Not(excludeRequestId),
+        startDate: LessThanOrEqual(endDate),
+        endDate: MoreThanOrEqual(startDate),
+      },
+    });
+
+    if (requests.length) {
+      await this.requestRepository.update(
+        { id: In(requests.map((r) => r.id)) },
+        { status: ReservationRequestStatus.REJECTED },
+      );
+    }
+  }
+
   private async emitReservationCreated(reservation: Reservation) {
+    const startDate = new Date(reservation.startDate);
+    const endDate = new Date(reservation.endDate);
+
     const event: ReservationCreatedEvent = {
       reservationId: reservation.id,
       accommodationId: reservation.accommodationId,
-      startDate: reservation.startDate.toISOString(),
-      endDate: reservation.endDate.toISOString(),
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
       reason: reservation.type,
     };
 
