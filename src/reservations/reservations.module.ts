@@ -5,6 +5,7 @@ import { ReservationsService } from './reservations.service';
 import { ReservationsController } from './reservations.controller';
 import { AccommodationClientModule } from '../accommodation-client';
 import { MessagingModule } from '../messaging/messaging.module';
+import { ReservationGrpcController } from './reservations.grpc.controller';
 
 @Module({
   imports: [
@@ -12,7 +13,7 @@ import { MessagingModule } from '../messaging/messaging.module';
     AccommodationClientModule,
     MessagingModule,
   ],
-  controllers: [ReservationsController],
+  controllers: [ReservationsController, ReservationGrpcController],
   providers: [ReservationsService],
   exports: [ReservationsService],
 })

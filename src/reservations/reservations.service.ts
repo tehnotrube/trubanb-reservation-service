@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThanOrEqual, MoreThanOrEqual, Not, In } from 'typeorm';
@@ -402,4 +403,23 @@ export class ReservationsService {
 
     await this.eventsPublisher.reservationCreated(event);
   }
-}
+
+  async validateForRating(reservationId: string, guestId: string) {
+    const resv = await this.reservationRepository.findOne({
+      where: { id: reservationId, guestId }
+    });
+
+    Logger.log('Validating ID:', reservationId);
+    Logger.log('Found Reservation:', resv); // If this is undefined, your ID is wrong
+
+    if (!resv) return { canRate: false };
+
+    const today = new Date();
+    const endDate = new Date(resv.endDate);
+    
+    Logger.log(`Comparing EndDate: ${endDate.toISOString()} with Today: ${today.toISOString()}`);
+
+    const isPast = endDate < today;
+    return { canRate: isPast, hostId: resv.hostId, accommodationId: resv.accommodationId, isPast };
+  }
+  }
