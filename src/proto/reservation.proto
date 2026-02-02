@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package reservation;
+
+service ReservationService {
+  rpc GetReservationForRating (RatingValidationRequest) returns (RatingValidationResponse);
+}
+
+message RatingValidationRequest {
+  string reservationId = 1;
+  string guestId = 2;
+}
+
+message RatingValidationResponse {
+  bool canRate = 1;
+  string hostId = 2;
+  string accommodationId = 3;
+  bool isPast = 4;
+}

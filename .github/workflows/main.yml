@@ -25,6 +25,7 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm run lint
       - run: npm run test:cov
+      - run: npm run test:e2e
 
   release:
     needs: test-and-scan
