@@ -8,6 +8,7 @@ import {
   Param,
   UseGuards,
   ParseUUIDPipe,
+  Header,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { ReservationsService } from './reservations.service';
@@ -21,7 +22,7 @@ import { plainToInstance } from 'class-transformer';
 
 @ApiTags('Reservations')
 @ApiBearerAuth()
-@Controller('reservations')
+@Controller('api/reservations')
 export class ReservationsController {
   constructor(private readonly reservationsService: ReservationsService) {}
 
@@ -54,6 +55,35 @@ export class ReservationsController {
     return requests.map((r) =>
       plainToInstance(ReservationRequestResponseDto, r, {
         excludeExtraneousValues: true,
+      }),
+    );
+  }
+
+  @Get('requests/pending')
+  @UseGuards(auth.KongJwtGuard, auth.RolesGuard)
+  @auth.Roles(auth.UserRole.HOST, auth.UserRole.ADMIN)
+  @Header('Cache-Control', 'no-cache, no-store, must-revalidate')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
+  async getAllPendingRequests(
+    @auth.CurrentUser() user: auth.AuthenticatedUser,
+  ) {
+    const requests =
+      await this.reservationsService.getAllPendingRequestsForHost(
+        user.id,
+        user.role,
+      );
+
+    return Promise.all(
+      requests.map(async (r) => {
+        const cancelCount =
+          await this.reservationsService.getGuestCancellationCount(r.guestId);
+        return {
+          ...plainToInstance(ReservationRequestResponseDto, r, {
+            excludeExtraneousValues: true,
+          }),
+          guestCancellationCount: cancelCount,
+        };
       }),
     );
   }

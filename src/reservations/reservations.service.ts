@@ -235,6 +235,25 @@ export class ReservationsService {
     });
   }
 
+  async getAllPendingRequestsForHost(
+    hostId: string,
+    role: UserRole,
+  ) {
+    if (role !== UserRole.ADMIN && role !== UserRole.HOST) {
+      throw new ForbiddenException(
+        'Not authorized to access pending requests',
+      );
+    }
+
+    return this.requestRepository.find({
+      where: {
+        hostId: role === UserRole.ADMIN ? undefined : hostId,
+        status: ReservationRequestStatus.PENDING,
+      },
+      order: { createdAt: 'ASC' },
+    });
+  }
+
   async getRequestsByGuest(guestId: string) {
     return this.requestRepository.find({
       where: { guestId },
