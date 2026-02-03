@@ -26,8 +26,8 @@ describe('Reservations Integration', () => {
   let dataSource: DataSource;
   const ACC_ID = '550e8400-e29b-41d4-a716-446655440000';
 
-  // Syncing with your headers.utils
-  const HOST_ID = 'test-host-123';
+  // Host uses email; guest uses id per controller rules
+  const HOST_ID = 'host@test.com';
   const GUEST_ID = 'test-guest-789';
 
   beforeAll(() => {
@@ -62,7 +62,7 @@ describe('Reservations Integration', () => {
       );
 
       const res = await request(app.getHttpServer() as App)
-        .post('/reservations/requests')
+          .post('/api/reservations/requests')
         .set(TEST_GUEST_TOKEN_HEADERS)
         .send({
           accommodationId: ACC_ID,
@@ -90,7 +90,7 @@ describe('Reservations Integration', () => {
       const target = await dataSource.getRepository(ReservationRequest).save({
         accommodationId: ACC_ID,
         hostId: HOST_ID,
-        guestId: 'guest-1',
+        guestId: GUEST_ID,
         startDate: new Date('2026-08-01'),
         endDate: new Date('2026-08-05'),
         numberOfGuests: 2,
@@ -103,7 +103,7 @@ describe('Reservations Integration', () => {
         .save({
           accommodationId: ACC_ID,
           hostId: HOST_ID,
-          guestId: 'guest-2',
+          guestId: GUEST_ID,
           startDate: new Date('2026-08-03'),
           endDate: new Date('2026-08-07'),
           numberOfGuests: 1,
@@ -112,7 +112,7 @@ describe('Reservations Integration', () => {
         });
 
       const res = await request(app.getHttpServer() as App)
-        .put(`/reservations/requests/${target.id}/approve`)
+        .put(`/api/reservations/requests/${target.id}/approve`)
         .set(TEST_HOST_TOKEN_HEADERS)
         .expect(200);
 
@@ -146,7 +146,7 @@ describe('Reservations Integration', () => {
       });
 
       await request(app.getHttpServer() as App)
-        .delete(`/reservations/${resv.id}`)
+        .delete(`/api/reservations/${resv.id}`)
         .set(TEST_GUEST_TOKEN_HEADERS)
         .expect(200);
 
@@ -172,7 +172,7 @@ describe('Reservations Integration', () => {
       });
 
       const res = await request(app.getHttpServer() as App)
-        .delete(`/reservations/${resv.id}`)
+        .delete(`/api/reservations/${resv.id}`)
         .set(TEST_GUEST_TOKEN_HEADERS)
         .expect(400);
 
@@ -185,7 +185,7 @@ describe('Reservations Integration', () => {
   describe('POST /reservations/blocks', () => {
     it('should allow host to create manual block', async () => {
       const res = await request(app.getHttpServer() as App)
-        .post('/reservations/blocks')
+          .post('/api/reservations/blocks')
         .set(TEST_HOST_TOKEN_HEADERS)
         .send({
           accommodationId: ACC_ID,
@@ -229,7 +229,7 @@ describe('Reservations Integration', () => {
       ]);
 
       const res = await request(app.getHttpServer() as App)
-        .get('/reservations')
+          .get('/api/reservations')
         .set(TEST_GUEST_TOKEN_HEADERS)
         .expect(200);
 
@@ -253,7 +253,7 @@ describe('Reservations Integration', () => {
 
       // 2. Host tries to block 24th-26th (overlaps with the 24th/25th)
       await request(app.getHttpServer() as App)
-        .post('/reservations/blocks')
+          .post('/api/reservations/blocks')
         .set(TEST_HOST_TOKEN_HEADERS)
         .send({
           accommodationId: ACC_ID,
@@ -293,7 +293,7 @@ describe('Reservations Integration', () => {
       ]);
 
       const res = await request(app.getHttpServer() as App)
-        .get(`/reservations/requests/pending/${ACC_ID}`)
+          .get(`/api/reservations/requests/pending/${ACC_ID}`)
         .set(TEST_HOST_TOKEN_HEADERS)
         .expect(200);
 
@@ -308,7 +308,7 @@ describe('Reservations Integration', () => {
     it('should return 403 if a different host tries to view pending requests', async () => {
       await dataSource.getRepository(ReservationRequest).save({
         accommodationId: ACC_ID,
-        hostId: HOST_ID, // Owned by test-host-123
+        hostId: HOST_ID, // Owned by host@test.com
         guestId: GUEST_ID,
         startDate: new Date('2026-11-01'),
         endDate: new Date('2026-11-05'),
@@ -318,7 +318,7 @@ describe('Reservations Integration', () => {
       });
 
       await request(app.getHttpServer() as App)
-        .get(`/reservations/requests/pending/${ACC_ID}`)
+        .get(`/api/reservations/requests/pending/${ACC_ID}`)
         .set(TEST_OTHER_HOST_TOKEN_HEADERS)
         .expect(403);
     });
@@ -338,7 +338,7 @@ describe('Reservations Integration', () => {
       });
 
       const res = await request(app.getHttpServer() as App)
-        .get(`/reservations/requests/${req.id}`)
+          .get(`/api/reservations/requests/${req.id}`)
         .set(TEST_GUEST_TOKEN_HEADERS)
         .expect(200);
 
@@ -351,7 +351,7 @@ describe('Reservations Integration', () => {
       const req = await dataSource.getRepository(ReservationRequest).save({
         accommodationId: ACC_ID,
         hostId: HOST_ID,
-        guestId: 'some-other-guest-id',
+        guestId: 'test-guest-456',
         startDate: new Date(),
         endDate: new Date(),
         status: ReservationRequestStatus.PENDING,
@@ -360,7 +360,7 @@ describe('Reservations Integration', () => {
       });
 
       await request(app.getHttpServer() as App)
-        .get(`/reservations/requests/${req.id}`)
+        .get(`/api/reservations/requests/${req.id}`)
         .set(TEST_GUEST_TOKEN_HEADERS)
         .expect(403);
     });
@@ -370,8 +370,8 @@ describe('Reservations Integration', () => {
     it('should allow host to remove their manual block', async () => {
       const block = await dataSource.getRepository(Reservation).save({
         accommodationId: ACC_ID,
-        hostId: HOST_ID,
-        guestId: HOST_ID,
+        hostId: TEST_HOST_TOKEN_HEADERS['x-user-id'],
+        guestId: TEST_HOST_TOKEN_HEADERS['x-user-id'],
         type: 'MANUAL',
         startDate: new Date(),
         endDate: new Date(),
@@ -380,7 +380,7 @@ describe('Reservations Integration', () => {
       });
 
       await request(app.getHttpServer() as App)
-        .delete(`/reservations/blocks/${block.id}`)
+        .delete(`/api/reservations/blocks/${block.id}`)
         .set(TEST_HOST_TOKEN_HEADERS)
         .expect(200);
 
