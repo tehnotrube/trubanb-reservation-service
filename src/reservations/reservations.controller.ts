@@ -8,6 +8,7 @@ import {
   Param,
   UseGuards,
   ParseUUIDPipe,
+  Header,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { ReservationsService } from './reservations.service';
@@ -21,9 +22,13 @@ import { plainToInstance } from 'class-transformer';
 
 @ApiTags('Reservations')
 @ApiBearerAuth()
-@Controller('reservations')
+@Controller('/api/reservations')
 export class ReservationsController {
   constructor(private readonly reservationsService: ReservationsService) {}
+
+  private getActorId(user: auth.AuthenticatedUser) {
+    return user.role === auth.UserRole.HOST ? user.email : user.id;
+  }
 
   @Post('requests')
   @UseGuards(auth.KongJwtGuard, auth.RolesGuard)
@@ -58,6 +63,35 @@ export class ReservationsController {
     );
   }
 
+  @Get('requests/pending')
+  @UseGuards(auth.KongJwtGuard, auth.RolesGuard)
+  @auth.Roles(auth.UserRole.HOST, auth.UserRole.ADMIN)
+  @Header('Cache-Control', 'no-cache, no-store, must-revalidate')
+  @Header('Pragma', 'no-cache')
+  @Header('Expires', '0')
+  async getAllPendingRequests(
+    @auth.CurrentUser() user: auth.AuthenticatedUser,
+  ) {
+    const requests =
+      await this.reservationsService.getAllPendingRequestsForHost(
+        this.getActorId(user),
+        user.role,
+      );
+
+    return Promise.all(
+      requests.map(async (r) => {
+        const cancelCount =
+          await this.reservationsService.getGuestCancellationCount(r.guestId);
+        return {
+          ...plainToInstance(ReservationRequestResponseDto, r, {
+            excludeExtraneousValues: true,
+          }),
+          guestCancellationCount: cancelCount,
+        };
+      }),
+    );
+  }
+
   @Get('requests/:id')
   @UseGuards(auth.KongJwtGuard)
   async getRequestById(
@@ -66,7 +100,7 @@ export class ReservationsController {
   ) {
     const request = await this.reservationsService.getRequestById(
       id,
-      user.id,
+      this.getActorId(user),
       user.role,
     );
     return plainToInstance(ReservationRequestResponseDto, request, {
@@ -97,7 +131,7 @@ export class ReservationsController {
     const requests =
       await this.reservationsService.getPendingRequestsForAccommodation(
         accommodationId,
-        user.id,
+        this.getActorId(user),
         user.role,
       );
 
@@ -124,7 +158,7 @@ export class ReservationsController {
   ) {
     const result = await this.reservationsService.approveRequest(
       id,
-      user.id,
+      this.getActorId(user),
       user.role,
     );
 
@@ -147,7 +181,7 @@ export class ReservationsController {
   ) {
     const request = await this.reservationsService.rejectRequest(
       id,
-      user.id,
+      this.getActorId(user),
       user.role,
     );
     return plainToInstance(ReservationRequestResponseDto, request, {
@@ -189,7 +223,7 @@ export class ReservationsController {
   ) {
     const reservation = await this.reservationsService.getReservationById(
       id,
-      user.id,
+      this.getActorId(user),
       user.role,
     );
     return plainToInstance(ReservationResponseDto, reservation, {
@@ -209,7 +243,7 @@ export class ReservationsController {
       dto.accommodationId,
       new Date(dto.startDate),
       new Date(dto.endDate),
-      user.id,
+      this.getActorId(user),
     );
 
     return plainToInstance(ReservationResponseDto, block, {
