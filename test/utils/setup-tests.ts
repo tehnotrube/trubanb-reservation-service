@@ -6,6 +6,7 @@ export let app: INestApplication;
 
 export const mockAccommodationGrpcService = {
   getAccommodationInfo: jest.fn(),
+  validateAndCalculatePrice: jest.fn(),
 };
 
 export const mockGrpcClient = {
