@@ -12,6 +12,7 @@ import { ReservationRequestStatus } from './enums';
 import {
   AccommodationClientService,
   AccommodationInfo,
+  ValidateAndCalculatePriceResponse,
 } from '../accommodation-client';
 import { ReservationEventsPublisher } from '../messaging/reservation-events.publisher';
 import { UserRole } from '../auth';
@@ -80,6 +81,7 @@ describe('ReservationsService', () => {
           provide: AccommodationClientService,
           useValue: {
             getAccommodationInfo: jest.fn(),
+            validateAndCalculatePrice: jest.fn(),
           },
         },
         {
@@ -103,7 +105,6 @@ describe('ReservationsService', () => {
 
   describe('createRequest', () => {
     beforeEach(() => {
-      // Set "today" to Jan 1, 2026 for all createRequest tests
       jest.useFakeTimers().setSystemTime(new Date('2026-01-01'));
     });
 
@@ -117,6 +118,21 @@ describe('ReservationsService', () => {
         maxGuests: 5,
         isPerUnit: true,
       } as AccommodationInfo);
+
+      accommodationClient.validateAndCalculatePrice.mockResolvedValue({
+        success: true,
+        message: 'Base price used',
+        accommodationExists: true,
+        datesValid: true,
+        guestsValid: true,
+        nights: 5,
+        totalPrice: 500,
+        pricePerNight: 100,
+        rulesApplied: 0,
+        hostId: 'host_1',
+        autoApprove: false,
+        isPerUnit: true,
+      } as ValidateAndCalculatePriceResponse);
 
       reservationRepo.findOne.mockResolvedValue(null);
       requestRepo.create.mockReturnValue(baseRequest());
@@ -148,6 +164,21 @@ describe('ReservationsService', () => {
         maxGuests: 5,
         isPerUnit: true,
       } as AccommodationInfo);
+
+      accommodationClient.validateAndCalculatePrice.mockResolvedValue({
+        success: true,
+        message: 'Base price used',
+        accommodationExists: true,
+        datesValid: true,
+        guestsValid: true,
+        nights: 5,
+        totalPrice: 500,
+        pricePerNight: 100,
+        rulesApplied: 0,
+        hostId: 'host_1',
+        autoApprove: false,
+        isPerUnit: true,
+      } as ValidateAndCalculatePriceResponse);
 
       reservationRepo.findOne.mockResolvedValue(null);
       requestRepo.create.mockReturnValue(

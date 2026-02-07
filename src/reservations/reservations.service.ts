@@ -3,7 +3,6 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
-  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, LessThanOrEqual, MoreThanOrEqual, Not, In } from 'typeorm';
@@ -60,13 +59,21 @@ export class ReservationsService {
       );
     }
 
-    const nights = Math.ceil(
-      (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24),
+    const calc = await this.accommodationClient.validateAndCalculatePrice(
+      dto.accommodationId,
+      dto.startDate,
+      dto.endDate,
+      dto.numberOfGuests,
     );
 
-    const price = accommodation.isPerUnit
-      ? accommodation.basePrice * nights
-      : accommodation.basePrice * nights * dto.numberOfGuests;
+
+    if (!calc.success) {
+      throw new BadRequestException(
+        calc.message || 'Cannot create reservation',
+      );
+    }
+
+    const price = calc.totalPrice;
 
     const existing = await this.reservationRepository.findOne({
       where: {
@@ -235,14 +242,9 @@ export class ReservationsService {
     });
   }
 
-  async getAllPendingRequestsForHost(
-    hostId: string,
-    role: UserRole,
-  ) {
+  async getAllPendingRequestsForHost(hostId: string, role: UserRole) {
     if (role !== UserRole.ADMIN && role !== UserRole.HOST) {
-      throw new ForbiddenException(
-        'Not authorized to access pending requests',
-      );
+      throw new ForbiddenException('Not authorized to access pending requests');
     }
 
     return this.requestRepository.find({
@@ -425,20 +427,20 @@ export class ReservationsService {
 
   async validateForRating(reservationId: string, guestId: string) {
     const resv = await this.reservationRepository.findOne({
-      where: { id: reservationId, guestId }
+      where: { id: reservationId, guestId },
     });
-
-    Logger.log('Validating ID:', reservationId);
-    Logger.log('Found Reservation:', resv); // If this is undefined, your ID is wrong
 
     if (!resv) return { canRate: false };
 
     const today = new Date();
     const endDate = new Date(resv.endDate);
-    
-    Logger.log(`Comparing EndDate: ${endDate.toISOString()} with Today: ${today.toISOString()}`);
 
     const isPast = endDate < today;
-    return { canRate: isPast, hostId: resv.hostId, accommodationId: resv.accommodationId, isPast };
+    return {
+      canRate: isPast,
+      hostId: resv.hostId,
+      accommodationId: resv.accommodationId,
+      isPast,
+    };
   }
-  }
+}

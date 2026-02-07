@@ -3,7 +3,9 @@ syntax = "proto3";
 package accommodation;
 
 service AccommodationService {
-  rpc GetAccommodationInfo(GetAccommodationInfoRequest) returns (GetAccommodationInfoResponse);
+  rpc GetAccommodationInfo (GetAccommodationInfoRequest) returns (GetAccommodationInfoResponse);
+
+  rpc ValidateAndCalculatePrice (ValidateAndCalculatePriceRequest) returns (ValidateAndCalculatePriceResponse);
 }
 
 message GetAccommodationInfoRequest {
@@ -11,12 +13,37 @@ message GetAccommodationInfoRequest {
 }
 
 message GetAccommodationInfoResponse {
-  bool exists = 1;
+  bool   exists           = 1;
   string accommodation_id = 2;
-  double base_price = 3;
-  bool auto_approve = 4;
-  string host_id = 5;
-  int32 min_guests = 6;
-  int32 max_guests = 7;
-  bool is_per_unit = 8;
+  double base_price       = 3;
+  bool   auto_approve     = 4;
+  string host_id          = 5;
+  int32  min_guests       = 6;
+  int32  max_guests       = 7;
+  bool   is_per_unit      = 8;
+}
+
+message ValidateAndCalculatePriceRequest {
+  string accommodation_id = 1;
+  string check_in         = 2;    
+  string check_out        = 3;    
+  int32  guest_count      = 4;
+}
+
+message ValidateAndCalculatePriceResponse {
+  bool   success           = 1;
+  string message           = 2;   
+
+  bool   accommodation_exists = 3;
+  bool   dates_valid         = 4;
+  bool   guests_valid        = 5;
+
+  int32  nights              = 6;
+  double total_price         = 7;
+  double price_per_night     = 8;
+  int32  rules_applied       = 9;
+
+  string host_id             = 10;
+  bool   auto_approve        = 11;
+  bool   is_per_unit         = 12;
 }

@@ -16,6 +16,7 @@ import {
 import { ReservationResponseDto } from '../../src/reservations/dto/reservation-response.dto';
 import { ReservationRequestResponseDto } from '../../src/reservations/dto/reservation-request-response.dto';
 import { App } from 'supertest/types';
+import { ValidateAndCalculatePriceResponse } from 'src/accommodation-client';
 
 interface RequestWithReservation {
   request: ReservationRequestResponseDto;
@@ -48,6 +49,23 @@ describe('Reservations Integration', () => {
 
   describe('POST /reservations/requests', () => {
     it('should create pending request with correct price calculation', async () => {
+      mockAccommodationGrpcService.validateAndCalculatePrice.mockReturnValue(
+        of({
+          success: true,
+          message: 'Base price used',
+          accommodationExists: true,
+          datesValid: true,
+          guestsValid: true,
+          nights: 3,
+          totalPrice: 900,
+          pricePerNight: 150,
+          rulesApplied: 0,
+          hostId: HOST_ID,
+          autoApprove: false,
+          isPerUnit: false,
+        } as ValidateAndCalculatePriceResponse),
+      );
+
       mockAccommodationGrpcService.getAccommodationInfo.mockReturnValue(
         of({
           exists: true,
@@ -62,7 +80,7 @@ describe('Reservations Integration', () => {
       );
 
       const res = await request(app.getHttpServer() as App)
-          .post('/api/reservations/requests')
+        .post('/api/reservations/requests')
         .set(TEST_GUEST_TOKEN_HEADERS)
         .send({
           accommodationId: ACC_ID,
@@ -185,7 +203,7 @@ describe('Reservations Integration', () => {
   describe('POST /reservations/blocks', () => {
     it('should allow host to create manual block', async () => {
       const res = await request(app.getHttpServer() as App)
-          .post('/api/reservations/blocks')
+        .post('/api/reservations/blocks')
         .set(TEST_HOST_TOKEN_HEADERS)
         .send({
           accommodationId: ACC_ID,
@@ -229,7 +247,7 @@ describe('Reservations Integration', () => {
       ]);
 
       const res = await request(app.getHttpServer() as App)
-          .get('/api/reservations')
+        .get('/api/reservations')
         .set(TEST_GUEST_TOKEN_HEADERS)
         .expect(200);
 
@@ -253,7 +271,7 @@ describe('Reservations Integration', () => {
 
       // 2. Host tries to block 24th-26th (overlaps with the 24th/25th)
       await request(app.getHttpServer() as App)
-          .post('/api/reservations/blocks')
+        .post('/api/reservations/blocks')
         .set(TEST_HOST_TOKEN_HEADERS)
         .send({
           accommodationId: ACC_ID,
@@ -293,7 +311,7 @@ describe('Reservations Integration', () => {
       ]);
 
       const res = await request(app.getHttpServer() as App)
-          .get(`/api/reservations/requests/pending/${ACC_ID}`)
+        .get(`/api/reservations/requests/pending/${ACC_ID}`)
         .set(TEST_HOST_TOKEN_HEADERS)
         .expect(200);
 
@@ -338,7 +356,7 @@ describe('Reservations Integration', () => {
       });
 
       const res = await request(app.getHttpServer() as App)
-          .get(`/api/reservations/requests/${req.id}`)
+        .get(`/api/reservations/requests/${req.id}`)
         .set(TEST_GUEST_TOKEN_HEADERS)
         .expect(200);
 

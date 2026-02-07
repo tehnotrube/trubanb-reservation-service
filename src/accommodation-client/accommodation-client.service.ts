@@ -17,10 +17,35 @@ export interface AccommodationInfo {
   isPerUnit: boolean;
 }
 
+export interface ValidateAndCalculatePriceRequest {
+  accommodationId: string;
+  checkIn: string;
+  checkOut: string;
+  guestCount: number;
+}
+
+export interface ValidateAndCalculatePriceResponse {
+  success: boolean;
+  message: string;
+  accommodationExists: boolean;
+  datesValid: boolean;
+  guestsValid: boolean;
+  nights: number;
+  totalPrice: number;
+  pricePerNight: number;
+  rulesApplied: number;
+  hostId: string;
+  autoApprove: boolean;
+  isPerUnit: boolean;
+}
+
 interface AccommodationServiceGrpc {
   getAccommodationInfo(
     data: GetAccommodationInfoRequest,
   ): Observable<AccommodationInfo>;
+  validateAndCalculatePrice(
+    data: ValidateAndCalculatePriceRequest,
+  ): Observable<ValidateAndCalculatePriceResponse>;
 }
 
 @Injectable()
@@ -42,6 +67,22 @@ export class AccommodationClientService implements OnModuleInit {
   ): Promise<AccommodationInfo> {
     return firstValueFrom(
       this.accommodationService.getAccommodationInfo({ accommodationId }),
+    );
+  }
+
+  async validateAndCalculatePrice(
+    accommodationId: string,
+    checkIn: string,
+    checkOut: string,
+    guestCount: number,
+  ): Promise<ValidateAndCalculatePriceResponse> {
+    return firstValueFrom(
+      this.accommodationService.validateAndCalculatePrice({
+        accommodationId,
+        checkIn,
+        checkOut,
+        guestCount,
+      }),
     );
   }
 }
