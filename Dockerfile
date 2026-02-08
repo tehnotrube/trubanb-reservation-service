@@ -19,6 +19,7 @@ FROM base AS production
 USER node
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
+COPY --from=build /app/src/proto ./proto
 COPY package.json ./package.json
 EXPOSE 3000
 CMD ["node", "dist/src/main.js"]

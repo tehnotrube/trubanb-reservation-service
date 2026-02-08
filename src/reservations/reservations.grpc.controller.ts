@@ -8,7 +8,7 @@ interface RatingValidationRequest {
 }
 
 interface HasActiveReservationsRequest {
-  userId: string;
+  userIdentifier: string;
   isHostCheck: boolean;
 }
 
@@ -44,18 +44,13 @@ export class ReservationGrpcController {
   async hasActiveOrFutureReservations(
     data: HasActiveReservationsRequest,
   ): Promise<HasActiveReservationsResponse> {
-    const { userId, isHostCheck } = data;
-    Logger.log(`gRPC call: hasActiveOrFutureReservations for user ${userId} (host=${isHostCheck})`);
-    const hasBlocking = await this.reservationsService.hasBlockingReservations(
-      userId,
+    const { userIdentifier, isHostCheck } = data;
+    Logger.log(
+      `gRPC call: hasActiveOrFutureReservations for user ${userIdentifier} (host=${isHostCheck})`,
+    );
+    return await this.reservationsService.hasActiveOrFutureReservations(
+      userIdentifier,
       isHostCheck,
     );
-
-    return {
-      hasBlockingReservations: hasBlocking,
-      message: hasBlocking
-        ? `${hasBlocking} future/active reservation(s) found`
-        : undefined,
-    };
   }
 }

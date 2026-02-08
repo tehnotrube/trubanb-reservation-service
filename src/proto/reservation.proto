@@ -22,11 +22,11 @@ message RatingValidationResponse {
 }
 
 message HasActiveReservationsRequest {
-  string userId     = 1;  
-  bool   isHostCheck = 2; 
+  string userIdentifier = 1;
+  bool   isHostCheck    = 2; 
 }
 
 message HasActiveReservationsResponse {
-  bool   hasActiveOrFuture = 1;
-  string message           = 2; 
+  bool   hasBlockingReservations = 1;
+  string message = 2; 
 }

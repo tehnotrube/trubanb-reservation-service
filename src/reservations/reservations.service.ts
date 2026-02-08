@@ -100,6 +100,7 @@ export class ReservationsService {
     });
 
     const savedRequest = await this.requestRepository.save(request);
+    console.log(`[createRequest] created request=${savedRequest.id}, hostId=${savedRequest.hostId}, status=${savedRequest.status}`);
 
     if (!accommodation.autoApprove) {
       // Notify host about new reservation request
@@ -521,36 +522,96 @@ export class ReservationsService {
     };
   }
 
+<<<<<<< HEAD
   private toISOString(date: Date | string): string {
     if (typeof date === 'string') {
       return new Date(date).toISOString();
     }
     return date.toISOString();
   }
-  async hasBlockingReservations(
-    userId: string,
+
+  async hasActiveOrFutureReservations(
+    userIdentifier: string,
     isHostCheck: boolean,
-  ): Promise<boolean> {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+  ) {
+    // Get today's date in YYYY-MM-DD format (local timezone)
+    const todayDate = new Date();
+    const todayString = todayDate.toISOString().split('T')[0];
+    const todayForQuery = new Date(todayString);
 
-    const qb = this.reservationRepository.createQueryBuilder('res');
+    console.log(`[hasActiveOrFutureReservations] hostCheck=${isHostCheck}, identifier=${userIdentifier}, today=${todayString}`);
 
-    qb.where('res.endDate >= :today', { today }).andWhere('res.type = :type', {
-      type: 'RESERVATION',
+    const reservationCount = await this.reservationRepository.count({
+      where: {
+        ...(isHostCheck
+          ? { hostId: userIdentifier }
+          : { guestId: userIdentifier }),
+        endDate: MoreThanOrEqual(todayForQuery),
+        type: 'RESERVATION',
+      },
     });
 
-    if (isHostCheck) {
-      qb.andWhere('res.hostId = :userId', { userId });
-    } else {
-      qb.andWhere('res.guestId = :userId', { userId });
+    console.log(`[hasActiveOrFutureReservations] reservationCount=${reservationCount}`);
+
+    if (reservationCount > 0) {
+      return {
+        hasBlockingReservations: true,
+        message: isHostCheck
+          ? 'Cannot delete account: you have active or future reservations on your accommodations.'
+          : 'Cannot delete account: you have active or future reservations.',
+      };
     }
 
-    const count = await qb.getCount();
+    const pendingRequestCount = await this.requestRepository.count({
+      where: {
+        ...(isHostCheck
+          ? { hostId: userIdentifier }
+          : { guestId: userIdentifier }),
+        status: In([ReservationRequestStatus.PENDING, ReservationRequestStatus.APPROVED]),
+        endDate: MoreThanOrEqual(todayForQuery),
+      },
+    });
 
-    console.log(
-      `Debug Deletion: Found ${count} reservations for user ${userId}`,
-    );
-    return count > 0;
+    console.log(`[hasActiveOrFutureReservations] pendingRequestCount=${pendingRequestCount}`);
+
+    // DEBUG: Log all requests matching hostId to see what's in DB
+    if (isHostCheck) {
+      const allRequestsForHost = await this.requestRepository.find({
+        where: { hostId: userIdentifier },
+      });
+      console.log(`[DEBUG] All requests for hostId=${userIdentifier}:`, JSON.stringify(allRequestsForHost.map(r => ({
+        id: r.id,
+        status: r.status,
+        endDate: r.endDate,
+        checkEndDateGTE: r.endDate >= todayForQuery,
+      })), null, 2));
+
+      // Check each condition separately
+      const allPending = await this.requestRepository.find({
+        where: { hostId: userIdentifier, status: ReservationRequestStatus.PENDING },
+      });
+      console.log(`[DEBUG] PENDING requests: ${allPending.length}`);
+
+      const allApproved = await this.requestRepository.find({
+        where: { hostId: userIdentifier, status: ReservationRequestStatus.APPROVED },
+      });
+      console.log(`[DEBUG] APPROVED requests: ${allApproved.length}`);
+
+      const futureRequests = await this.requestRepository.find({
+        where: { hostId: userIdentifier, endDate: MoreThanOrEqual(todayForQuery) },
+      });
+      console.log(`[DEBUG] Requests with endDate >= ${todayString}: ${futureRequests.length}`);
+    }
+
+    if (pendingRequestCount > 0) {
+      return {
+        hasBlockingReservations: true,
+        message: isHostCheck
+          ? 'Cannot delete account: you have pending reservation requests on your accommodations.'
+          : 'Cannot delete account: you have pending reservation requests.',
+      };
+    }
+
+    return { hasBlockingReservations: false };
   }
 }
