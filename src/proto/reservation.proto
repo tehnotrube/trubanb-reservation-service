@@ -4,6 +4,7 @@ package reservation;
 
 service ReservationService {
   rpc GetReservationForRating (RatingValidationRequest) returns (RatingValidationResponse);
+  rpc HasActiveOrFutureReservations (HasActiveReservationsRequest) returns (HasActiveReservationsResponse);
 }
 
 message RatingValidationRequest {
@@ -18,4 +19,14 @@ message RatingValidationResponse {
   bool isPast = 4;
   string guestName = 5;
   string accommodationName = 6;
+}
+
+message HasActiveReservationsRequest {
+  string userId     = 1;  
+  bool   isHostCheck = 2; 
+}
+
+message HasActiveReservationsResponse {
+  bool   hasActiveOrFuture = 1;
+  string message           = 2; 
 }

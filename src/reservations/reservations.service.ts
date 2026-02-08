@@ -527,4 +527,30 @@ export class ReservationsService {
     }
     return date.toISOString();
   }
+  async hasBlockingReservations(
+    userId: string,
+    isHostCheck: boolean,
+  ): Promise<boolean> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const qb = this.reservationRepository.createQueryBuilder('res');
+
+    qb.where('res.endDate >= :today', { today }).andWhere('res.type = :type', {
+      type: 'RESERVATION',
+    });
+
+    if (isHostCheck) {
+      qb.andWhere('res.hostId = :userId', { userId });
+    } else {
+      qb.andWhere('res.guestId = :userId', { userId });
+    }
+
+    const count = await qb.getCount();
+
+    console.log(
+      `Debug Deletion: Found ${count} reservations for user ${userId}`,
+    );
+    return count > 0;
+  }
 }
