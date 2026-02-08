@@ -10,6 +10,10 @@ import { ReservationEventsPublisher } from './reservation-events.publisher';
           name: 'reservation.events',
           type: 'topic',
         },
+        {
+          name: 'trubanb.notifications',
+          type: 'topic',
+        },
       ],
       uri: process.env.RABBITMQ_URL!,
       connectionInitOptions: { wait: false },

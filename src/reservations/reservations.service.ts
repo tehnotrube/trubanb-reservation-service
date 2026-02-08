@@ -103,6 +103,19 @@ export class ReservationsService {
     const savedRequest = await this.requestRepository.save(request);
 
     if (!accommodation.autoApprove) {
+      // Notify host about new reservation request
+      await this.eventsPublisher.notifyReservationRequestCreated({
+        requestId: savedRequest.id,
+        accommodationId: dto.accommodationId,
+        accommodationName: accommodation.name || 'Accommodation',
+        hostId: accommodation.hostId,
+        guestId,
+        guestName: 'Guest', // TODO: Fetch from user service
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+        numberOfGuests: dto.numberOfGuests,
+        price,
+      });
       return { request: savedRequest };
     }
 
@@ -195,6 +208,21 @@ export class ReservationsService {
 
     await this.emitReservationCreated(savedReservation);
 
+    // Notify guest that their request was approved
+    const accommodation = await this.accommodationClient.getAccommodationInfo(
+      request.accommodationId,
+    );
+    await this.eventsPublisher.notifyReservationRequestResponded({
+      requestId: request.id,
+      accommodationId: request.accommodationId,
+      accommodationName: accommodation.name || 'Accommodation',
+      hostId: request.hostId,
+      guestId: request.guestId,
+      status: 'APPROVED',
+      startDate: request.startDate.toISOString(),
+      endDate: request.endDate.toISOString(),
+    });
+
     return { request, reservation: savedReservation };
   }
 
@@ -212,7 +240,24 @@ export class ReservationsService {
     }
 
     request.status = ReservationRequestStatus.REJECTED;
-    return this.requestRepository.save(request);
+    const savedRequest = await this.requestRepository.save(request);
+
+    // Notify guest that their request was rejected
+    const accommodation = await this.accommodationClient.getAccommodationInfo(
+      request.accommodationId,
+    );
+    await this.eventsPublisher.notifyReservationRequestResponded({
+      requestId: request.id,
+      accommodationId: request.accommodationId,
+      accommodationName: accommodation.name || 'Accommodation',
+      hostId: request.hostId,
+      guestId: request.guestId,
+      status: 'REJECTED',
+      startDate: request.startDate.toISOString(),
+      endDate: request.endDate.toISOString(),
+    });
+
+    return savedRequest;
   }
 
   async getPendingRequestsForAccommodation(
@@ -359,9 +404,26 @@ export class ReservationsService {
       );
     }
 
+    // Get accommodation info for notification
+    const accommodation = await this.accommodationClient.getAccommodationInfo(
+      reservation.accommodationId,
+    );
+
     await this.reservationRepository.delete(reservationId);
 
     await this.eventsPublisher.reservationRemoved(reservationId);
+
+    // Notify host about the cancellation
+    await this.eventsPublisher.notifyReservationCancelled({
+      reservationId: reservation.id,
+      accommodationId: reservation.accommodationId,
+      accommodationName: accommodation.name || 'Accommodation',
+      hostId: reservation.hostId,
+      guestId: reservation.guestId,
+      guestName: 'Guest', // TODO: Fetch from user service
+      startDate: reservation.startDate.toISOString(),
+      endDate: reservation.endDate.toISOString(),
+    });
   }
 
   async getGuestCancellationCount(guestId: string): Promise<number> {

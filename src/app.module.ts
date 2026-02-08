@@ -4,6 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { MetricsModule } from './metrics';
+import { HealthModule } from './health/health.module';
 import { ReservationsModule } from './reservations';
 import { AuthModule } from './auth';
 import { getTypeOrmConfig } from './db/typeorm.config';
@@ -17,6 +18,7 @@ import { getTypeOrmConfig } from './db/typeorm.config';
       useFactory: () => getTypeOrmConfig(),
     }),
     MetricsModule,
+    HealthModule,
     AuthModule,
     ReservationsModule,
   ],
