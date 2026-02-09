@@ -492,17 +492,33 @@ export class ReservationsService {
       where: { id: reservationId, guestId },
     });
 
-    if (!resv) return { canRate: false };
+    if (!resv) {
+      return {
+        canRate: false,
+        hostId: '',
+        accommodationId: '',
+        isPast: false,
+        guestName: '',
+        accommodationName: '',
+      };
+    }
 
     const today = new Date();
     const endDate = new Date(resv.endDate);
-
     const isPast = endDate < today;
+
+    // Fetch accommodation name
+    const accommodation = await this.accommodationClient.getAccommodationInfo(
+      resv.accommodationId,
+    );
+
     return {
       canRate: isPast,
       hostId: resv.hostId,
       accommodationId: resv.accommodationId,
       isPast,
+      guestName: 'Guest', // TODO: Fetch from user service
+      accommodationName: accommodation.name || 'Accommodation',
     };
   }
 }
