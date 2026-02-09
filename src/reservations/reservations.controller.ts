@@ -27,7 +27,7 @@ export class ReservationsController {
   constructor(private readonly reservationsService: ReservationsService) {}
 
   private getActorId(user: auth.AuthenticatedUser) {
-    return user.role === auth.UserRole.HOST ? user.email : user.id;
+    return user.id;
   }
 
   @Post('requests')

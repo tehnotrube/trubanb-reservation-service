@@ -219,8 +219,8 @@ export class ReservationsService {
       hostId: request.hostId,
       guestId: request.guestId,
       status: 'APPROVED',
-      startDate: request.startDate.toISOString(),
-      endDate: request.endDate.toISOString(),
+      startDate: this.toISOString(request.startDate),
+      endDate: this.toISOString(request.endDate),
     });
 
     return { request, reservation: savedReservation };
@@ -253,8 +253,8 @@ export class ReservationsService {
       hostId: request.hostId,
       guestId: request.guestId,
       status: 'REJECTED',
-      startDate: request.startDate.toISOString(),
-      endDate: request.endDate.toISOString(),
+      startDate: this.toISOString(request.startDate),
+      endDate: this.toISOString(request.endDate),
     });
 
     return savedRequest;
@@ -421,8 +421,8 @@ export class ReservationsService {
       hostId: reservation.hostId,
       guestId: reservation.guestId,
       guestName: 'Guest', // TODO: Fetch from user service
-      startDate: reservation.startDate.toISOString(),
-      endDate: reservation.endDate.toISOString(),
+      startDate: this.toISOString(reservation.startDate),
+      endDate: this.toISOString(reservation.endDate),
     });
   }
 
@@ -520,5 +520,12 @@ export class ReservationsService {
       guestName: 'Guest', // TODO: Fetch from user service
       accommodationName: accommodation.name || 'Accommodation',
     };
+  }
+
+  private toISOString(date: Date | string): string {
+    if (typeof date === 'string') {
+      return new Date(date).toISOString();
+    }
+    return date.toISOString();
   }
 }
