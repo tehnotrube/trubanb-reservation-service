@@ -120,6 +120,7 @@ describe('ReservationsService', () => {
         minGuests: 1,
         maxGuests: 5,
         isPerUnit: true,
+        name: 'Test Accommodation',
       } as AccommodationInfo);
 
       accommodationClient.validateAndCalculatePrice.mockResolvedValue({
@@ -153,6 +154,115 @@ describe('ReservationsService', () => {
 
       expect(result.request.status).toBe(ReservationRequestStatus.PENDING);
       expect(result.reservation).toBeUndefined();
+    });
+
+    it('sends notification when creating pending request', async () => {
+      accommodationClient.getAccommodationInfo.mockResolvedValue({
+        exists: true,
+        basePrice: 100,
+        autoApprove: false,
+        hostId: 'host_1',
+        minGuests: 1,
+        maxGuests: 5,
+        isPerUnit: true,
+        name: 'Beach House',
+      } as AccommodationInfo);
+
+      accommodationClient.validateAndCalculatePrice.mockResolvedValue({
+        success: true,
+        message: 'Base price used',
+        accommodationExists: true,
+        datesValid: true,
+        guestsValid: true,
+        nights: 5,
+        totalPrice: 500,
+        pricePerNight: 100,
+        rulesApplied: 0,
+        hostId: 'host_1',
+        autoApprove: false,
+        isPerUnit: true,
+      } as ValidateAndCalculatePriceResponse);
+
+      reservationRepo.findOne.mockResolvedValue(null);
+      requestRepo.create.mockReturnValue(baseRequest());
+      requestRepo.save.mockResolvedValue(baseRequest());
+
+      await service.createRequest(
+        {
+          accommodationId: 'acc_1',
+          startDate: '2026-01-10',
+          endDate: '2026-01-15',
+          numberOfGuests: 2,
+        },
+        'guest_1',
+      );
+
+      expect(
+        eventsPublisher.notifyReservationRequestCreated,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestId: 'req_1',
+          accommodationId: 'acc_1',
+          accommodationName: 'Beach House',
+          hostId: 'host_1',
+          guestId: 'guest_1',
+          numberOfGuests: 2,
+          price: 500,
+        }),
+      );
+    });
+
+    it('does not send request created notification when autoApprove=true', async () => {
+      requestRepo.find.mockResolvedValue([]);
+
+      accommodationClient.getAccommodationInfo.mockResolvedValue({
+        exists: true,
+        basePrice: 100,
+        autoApprove: true,
+        hostId: 'host_1',
+        minGuests: 1,
+        maxGuests: 5,
+        isPerUnit: true,
+      } as AccommodationInfo);
+
+      accommodationClient.validateAndCalculatePrice.mockResolvedValue({
+        success: true,
+        message: 'Base price used',
+        accommodationExists: true,
+        datesValid: true,
+        guestsValid: true,
+        nights: 5,
+        totalPrice: 500,
+        pricePerNight: 100,
+        rulesApplied: 0,
+        hostId: 'host_1',
+        autoApprove: false,
+        isPerUnit: true,
+      } as ValidateAndCalculatePriceResponse);
+
+      reservationRepo.findOne.mockResolvedValue(null);
+      requestRepo.create.mockReturnValue(
+        baseRequest({ status: ReservationRequestStatus.APPROVED }),
+      );
+      requestRepo.save.mockResolvedValue(
+        baseRequest({ status: ReservationRequestStatus.APPROVED }),
+      );
+      reservationRepo.create.mockReturnValue(baseReservation());
+      reservationRepo.save.mockResolvedValue(baseReservation());
+
+      await service.createRequest(
+        {
+          accommodationId: 'acc_1',
+          startDate: '2026-01-10',
+          endDate: '2026-01-15',
+          numberOfGuests: 2,
+        },
+        'guest_1',
+      );
+
+      expect(
+        eventsPublisher.notifyReservationRequestCreated,
+      ).not.toHaveBeenCalled();
     });
 
     it('auto-approves and creates reservation when autoApprove=true', async () => {
@@ -273,6 +383,37 @@ describe('ReservationsService', () => {
       expect(eventsPublisher.reservationCreated).toHaveBeenCalled();
     });
 
+    it('sends approved notification to guest', async () => {
+      requestRepo.findOne.mockResolvedValue(baseRequest());
+      requestRepo.find.mockResolvedValue([]);
+      reservationRepo.findOne.mockResolvedValue(null);
+      requestRepo.save.mockResolvedValue(
+        baseRequest({ status: ReservationRequestStatus.APPROVED }),
+      );
+      reservationRepo.create.mockReturnValue(baseReservation());
+      reservationRepo.save.mockResolvedValue(baseReservation());
+      accommodationClient.getAccommodationInfo.mockResolvedValue({
+        exists: true,
+        name: 'Beach House',
+        hostId: 'host_1',
+      } as AccommodationInfo);
+
+      await service.approveRequest('req_1', 'host_1', UserRole.HOST);
+
+      expect(
+        eventsPublisher.notifyReservationRequestResponded,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestId: 'req_1',
+          accommodationId: 'acc_1',
+          accommodationName: 'Beach House',
+          hostId: 'host_1',
+          guestId: 'guest_1',
+          status: 'APPROVED',
+        }),
+      );
+    });
+
     it('forbids non-owner host', async () => {
       requestRepo.findOne.mockResolvedValue(baseRequest());
 
@@ -301,6 +442,33 @@ describe('ReservationsService', () => {
       );
 
       expect(result.status).toBe(ReservationRequestStatus.REJECTED);
+    });
+
+    it('sends rejected notification to guest', async () => {
+      requestRepo.findOne.mockResolvedValue(baseRequest());
+      requestRepo.save.mockResolvedValue(
+        baseRequest({ status: ReservationRequestStatus.REJECTED }),
+      );
+      accommodationClient.getAccommodationInfo.mockResolvedValue({
+        exists: true,
+        name: 'Mountain Cabin',
+        hostId: 'host_1',
+      } as AccommodationInfo);
+
+      await service.rejectRequest('req_1', 'host_1', UserRole.HOST);
+
+      expect(
+        eventsPublisher.notifyReservationRequestResponded,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestId: 'req_1',
+          accommodationId: 'acc_1',
+          accommodationName: 'Mountain Cabin',
+          hostId: 'host_1',
+          guestId: 'guest_1',
+          status: 'REJECTED',
+        }),
+      );
     });
   });
 
@@ -404,6 +572,35 @@ describe('ReservationsService', () => {
 
       expect(reservationRepo.delete).toHaveBeenCalledWith('res_1');
       expect(eventsPublisher.reservationRemoved).toHaveBeenCalled();
+
+      jest.useRealTimers();
+    });
+
+    it('sends cancellation notification to host', async () => {
+      jest.useFakeTimers().setSystemTime(new Date('2026-01-01'));
+
+      const res = baseReservation({
+        startDate: new Date('2026-01-10'),
+        endDate: new Date('2026-01-15'),
+      });
+      reservationRepo.findOne.mockResolvedValue(res);
+      accommodationClient.getAccommodationInfo.mockResolvedValue({
+        exists: true,
+        name: 'Beach House',
+        hostId: 'host_1',
+      } as AccommodationInfo);
+
+      await service.cancelReservation('res_1', 'guest_1');
+
+      expect(eventsPublisher.notifyReservationCancelled).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reservationId: 'res_1',
+          accommodationId: 'acc_1',
+          accommodationName: 'Beach House',
+          hostId: 'host_1',
+          guestId: 'guest_1',
+        }),
+      );
 
       jest.useRealTimers();
     });
