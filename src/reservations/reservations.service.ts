@@ -66,7 +66,6 @@ export class ReservationsService {
       dto.numberOfGuests,
     );
 
-
     if (!calc.success) {
       throw new BadRequestException(
         calc.message || 'Cannot create reservation',

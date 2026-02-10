@@ -207,7 +207,7 @@ describe('ReservationsController', () => {
       expect(result).toEqual([]);
       expect(
         mockReservationService.getPendingRequestsForAccommodation,
-      ).toHaveBeenCalledWith('acc_1', hostUser().email, hostUser().role);
+      ).toHaveBeenCalledWith('acc_1', hostUser().id, hostUser().role);
     });
   });
 
@@ -222,7 +222,7 @@ describe('ReservationsController', () => {
 
       expect(mockReservationService.approveRequest).toHaveBeenCalledWith(
         'req_1',
-        hostUser().email,
+        hostUser().id,
         hostUser().role,
       );
       expect(result.reservation.id).toBe('res_1');
@@ -239,7 +239,7 @@ describe('ReservationsController', () => {
 
       expect(mockReservationService.rejectRequest).toHaveBeenCalledWith(
         'req_1',
-        hostUser().email,
+        hostUser().id,
         hostUser().role,
       );
       expect(result.status).toBe(ReservationRequestStatus.REJECTED);
@@ -318,7 +318,7 @@ describe('ReservationsController', () => {
         'acc_1',
         new Date(dto.startDate),
         new Date(dto.endDate),
-        hostUser().email,
+        hostUser().id,
       );
       expect(result.id).toBe('res_1');
     });

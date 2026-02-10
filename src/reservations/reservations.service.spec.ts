@@ -89,6 +89,9 @@ describe('ReservationsService', () => {
           useValue: {
             reservationCreated: jest.fn(),
             reservationRemoved: jest.fn(),
+            notifyReservationRequestCreated: jest.fn(),
+            notifyReservationRequestResponded: jest.fn(),
+            notifyReservationCancelled: jest.fn(),
           },
         },
       ],
@@ -254,6 +257,11 @@ describe('ReservationsService', () => {
       );
       reservationRepo.create.mockReturnValue(baseReservation());
       reservationRepo.save.mockResolvedValue(baseReservation());
+      accommodationClient.getAccommodationInfo.mockResolvedValue({
+        exists: true,
+        name: 'Test Accommodation',
+        hostId: 'host_1',
+      } as AccommodationInfo);
 
       const result = await service.approveRequest(
         'req_1',
@@ -280,6 +288,11 @@ describe('ReservationsService', () => {
       requestRepo.save.mockResolvedValue(
         baseRequest({ status: ReservationRequestStatus.REJECTED }),
       );
+      accommodationClient.getAccommodationInfo.mockResolvedValue({
+        exists: true,
+        name: 'Test Accommodation',
+        hostId: 'host_1',
+      } as AccommodationInfo);
 
       const result = await service.rejectRequest(
         'req_1',
@@ -381,6 +394,11 @@ describe('ReservationsService', () => {
       // Reservation starts 2026-01-10
       const res = baseReservation({ startDate: new Date('2026-01-10') });
       reservationRepo.findOne.mockResolvedValue(res);
+      accommodationClient.getAccommodationInfo.mockResolvedValue({
+        exists: true,
+        name: 'Test Accommodation',
+        hostId: 'host_1',
+      } as AccommodationInfo);
 
       await service.cancelReservation('res_1', 'guest_1');
 
