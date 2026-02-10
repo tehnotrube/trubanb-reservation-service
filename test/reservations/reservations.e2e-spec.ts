@@ -32,7 +32,7 @@ describe('Reservations Integration', () => {
   const HOST_ID = 'test-host-123';
   const GUEST_ID = 'test-guest-789';
 
-  beforeAll(() => {
+
     dataSource = app.get(DataSource);
   });
 
