@@ -9,6 +9,7 @@ interface GetAccommodationInfoRequest {
 export interface AccommodationInfo {
   exists: boolean;
   accommodationId: string;
+  name?: string;
   basePrice: number;
   autoApprove: boolean;
   hostId: string;

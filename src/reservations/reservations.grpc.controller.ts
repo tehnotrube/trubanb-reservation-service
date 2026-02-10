@@ -20,15 +20,13 @@ export class ReservationGrpcController {
       guestId,
     );
 
-    if (!resv) {
-      return { canRate: false, hostId: '', accommodationId: '', isPast: false };
-    }
-
     return {
-      canRate: resv.isPast,
+      canRate: resv.canRate,
       hostId: resv.hostId,
       accommodationId: resv.accommodationId,
       isPast: resv.isPast,
+      guestName: resv.guestName,
+      accommodationName: resv.accommodationName,
     };
   }
 }

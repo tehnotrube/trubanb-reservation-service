@@ -16,4 +16,6 @@ message RatingValidationResponse {
   string hostId = 2;
   string accommodationId = 3;
   bool isPast = 4;
+  string guestName = 5;
+  string accommodationName = 6;
 }

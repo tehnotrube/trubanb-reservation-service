@@ -27,8 +27,8 @@ describe('Reservations Integration', () => {
   let dataSource: DataSource;
   const ACC_ID = '550e8400-e29b-41d4-a716-446655440000';
 
-  // Host uses email; guest uses id per controller rules
-  const HOST_ID = 'host@test.com';
+  // Both host and guest use user.id from headers
+  const HOST_ID = 'test-host-123';
   const GUEST_ID = 'test-guest-789';
 
   beforeAll(() => {

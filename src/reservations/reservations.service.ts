@@ -66,7 +66,6 @@ export class ReservationsService {
       dto.numberOfGuests,
     );
 
-
     if (!calc.success) {
       throw new BadRequestException(
         calc.message || 'Cannot create reservation',
@@ -103,6 +102,19 @@ export class ReservationsService {
     const savedRequest = await this.requestRepository.save(request);
 
     if (!accommodation.autoApprove) {
+      // Notify host about new reservation request
+      await this.eventsPublisher.notifyReservationRequestCreated({
+        requestId: savedRequest.id,
+        accommodationId: dto.accommodationId,
+        accommodationName: accommodation.name || 'Accommodation',
+        hostId: accommodation.hostId,
+        guestId,
+        guestName: 'Guest', // TODO: Fetch from user service
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+        numberOfGuests: dto.numberOfGuests,
+        price,
+      });
       return { request: savedRequest };
     }
 
@@ -195,6 +207,21 @@ export class ReservationsService {
 
     await this.emitReservationCreated(savedReservation);
 
+    // Notify guest that their request was approved
+    const accommodation = await this.accommodationClient.getAccommodationInfo(
+      request.accommodationId,
+    );
+    await this.eventsPublisher.notifyReservationRequestResponded({
+      requestId: request.id,
+      accommodationId: request.accommodationId,
+      accommodationName: accommodation.name || 'Accommodation',
+      hostId: request.hostId,
+      guestId: request.guestId,
+      status: 'APPROVED',
+      startDate: this.toISOString(request.startDate),
+      endDate: this.toISOString(request.endDate),
+    });
+
     return { request, reservation: savedReservation };
   }
 
@@ -212,7 +239,24 @@ export class ReservationsService {
     }
 
     request.status = ReservationRequestStatus.REJECTED;
-    return this.requestRepository.save(request);
+    const savedRequest = await this.requestRepository.save(request);
+
+    // Notify guest that their request was rejected
+    const accommodation = await this.accommodationClient.getAccommodationInfo(
+      request.accommodationId,
+    );
+    await this.eventsPublisher.notifyReservationRequestResponded({
+      requestId: request.id,
+      accommodationId: request.accommodationId,
+      accommodationName: accommodation.name || 'Accommodation',
+      hostId: request.hostId,
+      guestId: request.guestId,
+      status: 'REJECTED',
+      startDate: this.toISOString(request.startDate),
+      endDate: this.toISOString(request.endDate),
+    });
+
+    return savedRequest;
   }
 
   async getPendingRequestsForAccommodation(
@@ -359,9 +403,26 @@ export class ReservationsService {
       );
     }
 
+    // Get accommodation info for notification
+    const accommodation = await this.accommodationClient.getAccommodationInfo(
+      reservation.accommodationId,
+    );
+
     await this.reservationRepository.delete(reservationId);
 
     await this.eventsPublisher.reservationRemoved(reservationId);
+
+    // Notify host about the cancellation
+    await this.eventsPublisher.notifyReservationCancelled({
+      reservationId: reservation.id,
+      accommodationId: reservation.accommodationId,
+      accommodationName: accommodation.name || 'Accommodation',
+      hostId: reservation.hostId,
+      guestId: reservation.guestId,
+      guestName: 'Guest', // TODO: Fetch from user service
+      startDate: this.toISOString(reservation.startDate),
+      endDate: this.toISOString(reservation.endDate),
+    });
   }
 
   async getGuestCancellationCount(guestId: string): Promise<number> {
@@ -430,17 +491,40 @@ export class ReservationsService {
       where: { id: reservationId, guestId },
     });
 
-    if (!resv) return { canRate: false };
+    if (!resv) {
+      return {
+        canRate: false,
+        hostId: '',
+        accommodationId: '',
+        isPast: false,
+        guestName: '',
+        accommodationName: '',
+      };
+    }
 
     const today = new Date();
     const endDate = new Date(resv.endDate);
-
     const isPast = endDate < today;
+
+    // Fetch accommodation name
+    const accommodation = await this.accommodationClient.getAccommodationInfo(
+      resv.accommodationId,
+    );
+
     return {
       canRate: isPast,
       hostId: resv.hostId,
       accommodationId: resv.accommodationId,
       isPast,
+      guestName: 'Guest', // TODO: Fetch from user service
+      accommodationName: accommodation.name || 'Accommodation',
     };
+  }
+
+  private toISOString(date: Date | string): string {
+    if (typeof date === 'string') {
+      return new Date(date).toISOString();
+    }
+    return date.toISOString();
   }
 }
