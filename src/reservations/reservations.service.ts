@@ -100,7 +100,9 @@ export class ReservationsService {
     });
 
     const savedRequest = await this.requestRepository.save(request);
-    console.log(`[createRequest] created request=${savedRequest.id}, hostId=${savedRequest.hostId}, status=${savedRequest.status}`);
+    console.log(
+      `[createRequest] created request=${savedRequest.id}, hostId=${savedRequest.hostId}, status=${savedRequest.status}`,
+    );
 
     if (!accommodation.autoApprove) {
       // Notify host about new reservation request
@@ -539,7 +541,9 @@ export class ReservationsService {
     const todayString = todayDate.toISOString().split('T')[0];
     const todayForQuery = new Date(todayString);
 
-    console.log(`[hasActiveOrFutureReservations] hostCheck=${isHostCheck}, identifier=${userIdentifier}, today=${todayString}`);
+    console.log(
+      `[hasActiveOrFutureReservations] hostCheck=${isHostCheck}, identifier=${userIdentifier}, today=${todayString}`,
+    );
 
     const reservationCount = await this.reservationRepository.count({
       where: {
@@ -551,7 +555,9 @@ export class ReservationsService {
       },
     });
 
-    console.log(`[hasActiveOrFutureReservations] reservationCount=${reservationCount}`);
+    console.log(
+      `[hasActiveOrFutureReservations] reservationCount=${reservationCount}`,
+    );
 
     if (reservationCount > 0) {
       return {
@@ -567,40 +573,63 @@ export class ReservationsService {
         ...(isHostCheck
           ? { hostId: userIdentifier }
           : { guestId: userIdentifier }),
-        status: In([ReservationRequestStatus.PENDING, ReservationRequestStatus.APPROVED]),
+        status: In([
+          ReservationRequestStatus.PENDING,
+          ReservationRequestStatus.APPROVED,
+        ]),
         endDate: MoreThanOrEqual(todayForQuery),
       },
     });
 
-    console.log(`[hasActiveOrFutureReservations] pendingRequestCount=${pendingRequestCount}`);
+    console.log(
+      `[hasActiveOrFutureReservations] pendingRequestCount=${pendingRequestCount}`,
+    );
 
     // DEBUG: Log all requests matching hostId to see what's in DB
     if (isHostCheck) {
       const allRequestsForHost = await this.requestRepository.find({
         where: { hostId: userIdentifier },
       });
-      console.log(`[DEBUG] All requests for hostId=${userIdentifier}:`, JSON.stringify(allRequestsForHost.map(r => ({
-        id: r.id,
-        status: r.status,
-        endDate: r.endDate,
-        checkEndDateGTE: r.endDate >= todayForQuery,
-      })), null, 2));
+      console.log(
+        `[DEBUG] All requests for hostId=${userIdentifier}:`,
+        JSON.stringify(
+          allRequestsForHost.map((r) => ({
+            id: r.id,
+            status: r.status,
+            endDate: r.endDate,
+            checkEndDateGTE: r.endDate >= todayForQuery,
+          })),
+          null,
+          2,
+        ),
+      );
 
       // Check each condition separately
       const allPending = await this.requestRepository.find({
-        where: { hostId: userIdentifier, status: ReservationRequestStatus.PENDING },
+        where: {
+          hostId: userIdentifier,
+          status: ReservationRequestStatus.PENDING,
+        },
       });
       console.log(`[DEBUG] PENDING requests: ${allPending.length}`);
 
       const allApproved = await this.requestRepository.find({
-        where: { hostId: userIdentifier, status: ReservationRequestStatus.APPROVED },
+        where: {
+          hostId: userIdentifier,
+          status: ReservationRequestStatus.APPROVED,
+        },
       });
       console.log(`[DEBUG] APPROVED requests: ${allApproved.length}`);
 
       const futureRequests = await this.requestRepository.find({
-        where: { hostId: userIdentifier, endDate: MoreThanOrEqual(todayForQuery) },
+        where: {
+          hostId: userIdentifier,
+          endDate: MoreThanOrEqual(todayForQuery),
+        },
       });
-      console.log(`[DEBUG] Requests with endDate >= ${todayString}: ${futureRequests.length}`);
+      console.log(
+        `[DEBUG] Requests with endDate >= ${todayString}: ${futureRequests.length}`,
+      );
     }
 
     if (pendingRequestCount > 0) {
@@ -613,6 +642,7 @@ export class ReservationsService {
     }
 
     return { hasBlockingReservations: false };
+  }
   private toISOString(date: Date | string): string {
     if (typeof date === 'string') {
       return new Date(date).toISOString();

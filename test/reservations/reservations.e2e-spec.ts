@@ -32,7 +32,7 @@ describe('Reservations Integration', () => {
   const HOST_ID = 'test-host-123';
   const GUEST_ID = 'test-guest-789';
 
-
+  beforeAll(async () => {
     dataSource = app.get(DataSource);
   });
 
@@ -389,8 +389,8 @@ describe('Reservations Integration', () => {
     it('should allow host to remove their manual block', async () => {
       const block = await dataSource.getRepository(Reservation).save({
         accommodationId: ACC_ID,
-        hostId: TEST_HOST_TOKEN_HEADERS['x-user-id'],
-        guestId: TEST_HOST_TOKEN_HEADERS['x-user-id'],
+        hostId: HOST_ID,
+        guestId: HOST_ID,
         type: 'MANUAL',
         startDate: new Date(),
         endDate: new Date(),
