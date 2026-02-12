@@ -28,6 +28,7 @@ describe('Reservations Integration', () => {
   const ACC_ID = '550e8400-e29b-41d4-a716-446655440000';
 
   // Both host and guest use user.id from headers
+  // Host and guest use id (x-user-id)
   const HOST_ID = 'test-host-123';
   const GUEST_ID = 'test-guest-789';
 
@@ -326,7 +327,7 @@ describe('Reservations Integration', () => {
     it('should return 403 if a different host tries to view pending requests', async () => {
       await dataSource.getRepository(ReservationRequest).save({
         accommodationId: ACC_ID,
-        hostId: HOST_ID, // Owned by host@test.com
+        hostId: HOST_ID, // Owned by test-host-123
         guestId: GUEST_ID,
         startDate: new Date('2026-11-01'),
         endDate: new Date('2026-11-05'),
@@ -388,8 +389,8 @@ describe('Reservations Integration', () => {
     it('should allow host to remove their manual block', async () => {
       const block = await dataSource.getRepository(Reservation).save({
         accommodationId: ACC_ID,
-        hostId: TEST_HOST_TOKEN_HEADERS['x-user-id'],
-        guestId: TEST_HOST_TOKEN_HEADERS['x-user-id'],
+        hostId: HOST_ID,
+        guestId: HOST_ID,
         type: 'MANUAL',
         startDate: new Date(),
         endDate: new Date(),

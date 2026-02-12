@@ -1,10 +1,20 @@
-import { Controller } from '@nestjs/common';
+import { Controller, Logger } from '@nestjs/common';
 import { GrpcMethod } from '@nestjs/microservices';
 import { ReservationsService } from './reservations.service';
 
 interface RatingValidationRequest {
   reservationId: string;
   guestId: string;
+}
+
+interface HasActiveReservationsRequest {
+  userIdentifier: string;
+  isHostCheck: boolean;
+}
+
+interface HasActiveReservationsResponse {
+  hasBlockingReservations: boolean;
+  message?: string;
 }
 
 @Controller()
@@ -28,5 +38,19 @@ export class ReservationGrpcController {
       guestName: resv.guestName,
       accommodationName: resv.accommodationName,
     };
+  }
+
+  @GrpcMethod('ReservationService', 'HasActiveOrFutureReservations')
+  async hasActiveOrFutureReservations(
+    data: HasActiveReservationsRequest,
+  ): Promise<HasActiveReservationsResponse> {
+    const { userIdentifier, isHostCheck } = data;
+    Logger.log(
+      `gRPC call: hasActiveOrFutureReservations for user ${userIdentifier} (host=${isHostCheck})`,
+    );
+    return await this.reservationsService.hasActiveOrFutureReservations(
+      userIdentifier,
+      isHostCheck,
+    );
   }
 }
