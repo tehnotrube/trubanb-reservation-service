@@ -524,7 +524,6 @@ export class ReservationsService {
     };
   }
 
-<<<<<<< HEAD
   private toISOString(date: Date | string): string {
     if (typeof date === 'string') {
       return new Date(date).toISOString();
@@ -642,11 +641,5 @@ export class ReservationsService {
     }
 
     return { hasBlockingReservations: false };
-  }
-  private toISOString(date: Date | string): string {
-    if (typeof date === 'string') {
-      return new Date(date).toISOString();
-    }
-    return date.toISOString();
   }
 }
