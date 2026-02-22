@@ -411,6 +411,11 @@ export class ReservationsService {
       reservation.accommodationId,
     );
 
+    if (reservation.request) {
+      reservation.request.status = ReservationRequestStatus.CANCELLED;
+      await this.requestRepository.save(reservation.request);
+    }
+
     await this.reservationRepository.delete(reservationId);
 
     await this.eventsPublisher.reservationRemoved(reservationId);
