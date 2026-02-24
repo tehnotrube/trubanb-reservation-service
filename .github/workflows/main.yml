@@ -59,18 +59,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Login to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Prepare Kaniko Config
+        run: |
+          mkdir -p /tmp/kaniko
+          echo '{"auths":{"ghcr.io":{"auth":"'$(echo -n "${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}" | base64)'"}}}' > /tmp/kaniko/config.json
 
-      - name: Build & Push Image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository_owner }}/trubanb-reservation-service:${{ needs.release.outputs.new_release_version }}
-            ghcr.io/${{ github.repository_owner }}/trubanb-reservation-service:latest
+      - name: Build & Push with Kaniko
+        run: |
+          docker run --rm \
+            -v "$PWD":/workspace \
+            -v /tmp/kaniko:/kaniko/.docker \
+            gcr.io/kaniko-project/executor:v1.23.2-debug \
+            --context=/workspace \
+            --dockerfile=/workspace/Dockerfile \
+            --destination=ghcr.io/${{ github.repository_owner }}/trubanb-reservation-service:${{ needs.release.outputs.new_release_version }} \
+            --destination=ghcr.io/${{ github.repository_owner }}/trubanb-reservation-service:latest \
+            --cache=true \
+            --cache-repo=ghcr.io/${{ github.repository_owner }}/trubanb-reservation-service-cache \
+            --cache-ttl=168h \
+            --compressed-caching=false \
+            --push-retry=3 \
+            --label=org.opencontainers.image.source=https://github.com/${{ github.repository }} \
+            --label=org.opencontainers.image.description="Trubanb Reservation Service" \
+            --label=org.opencontainers.image.licenses=MIT \
+            --label=org.opencontainers.image.revision=${{ github.sha }} \
+            --label=org.opencontainers.image.version=${{ needs.release.outputs.new_release_version }}
